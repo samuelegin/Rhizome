@@ -1,0 +1,13 @@
+{
+  "name": "rhizome-indexer",
+  "version": "0.0.1",
+  "type": "module",
+  "scripts": {
+    "codegen": "envio codegen",
+    "dev": "envio dev",
+    "start": "envio start"
+  },
+  "dependencies": {
+    "envio": "3.12.0"
+  }
+}

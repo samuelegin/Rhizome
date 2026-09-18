@@ -1,0 +1,43 @@
+# yaml-language-server: $schema=./node_modules/envio/evm.schema.json
+name: rhizome-indexer
+description: Indexes Rio evidence and Rhizome verified connections on Monad Testnet
+
+contracts:
+  - name: RioGovernance
+    events:
+      - event: "ProposalCreated(uint256 indexed proposalId, address indexed creator, string title)"
+      - event: "VoteCast(address indexed voter, uint256 indexed proposalId, uint8 support, uint256 timestamp)"
+
+  - name: RioStaking
+    events:
+      - event: "Staked(address indexed user, uint256 amount, uint256 timestamp)"
+      - event: "Unstaked(address indexed user, uint256 amount, uint256 timestamp)"
+
+  - name: RelationshipRegistry
+    events:
+      - event: "ConnectionRegistered(bytes32 indexed connectionId, address indexed userA, address indexed userB, bytes32 signalType, uint32 evidenceCount, uint64 firstQualifiedAt, uint64 lastQualifiedAt, bytes32 evidenceRef)"
+      - event: "RegistrarUpdated(address indexed oldRegistrar, address indexed newRegistrar)"
+
+  - name: RhizomeFactory
+    events:
+      - event: "RhizomeCreated(address indexed rhizome, address indexed creator, string name, bytes32 signalType, uint64 freshnessPeriod, uint16 minimumConnections)"
+
+  - name: Rhizome
+    events:
+      - event: "BootstrapMemberAdded(address indexed member)"
+      - event: "BootstrapMemberRemoved(address indexed member)"
+      - event: "CreatorTransferred(address indexed oldCreator, address indexed newCreator)"
+
+chains:
+  - id: 10143
+    start_block: 63102860
+    contracts:
+      - name: RioGovernance
+        address: "${RIO_GOVERNANCE_ADDRESS}"
+      - name: RioStaking
+        address: "${RIO_STAKING_ADDRESS}"
+      - name: RelationshipRegistry
+        address: "${RELATIONSHIP_REGISTRY_ADDRESS}"
+      - name: RhizomeFactory
+        address: "${RHIZOME_FACTORY_ADDRESS}"
+      - name: Rhizome

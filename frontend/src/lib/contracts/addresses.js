@@ -1,0 +1,13 @@
+export const CONTRACT_ADDRESSES = {
+  RELATIONSHIP_REGISTRY: '0xf4F6632872b827e85517904E891F149837953469',
+  RHIZOME_FACTORY: '0xCafb8e54d7A86a9d37158a5069624Aaac22Eb2BF',
+  RIO_GOVERNANCE: '0x48D8896D16a7EA7ef71C5e615b1cDb44501AD610',
+  RIO_STAKING: '0x3A4ab9f0Ba9f9DAA34d2DF0e7D70a72C54290aED',
+  RIO_TOKEN: '0x5a9Cb816b188307b6F27C5CA71491BeB96bd48EC',
+
+  DEMO_RHIZOME: null,
+}
+
+export function isDeployed(address) {
+  return typeof address === 'string' && address.length === 42 && address.startsWith('0x')
+}

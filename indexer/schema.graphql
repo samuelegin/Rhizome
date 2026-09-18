@@ -1,0 +1,85 @@
+type Proposal {
+  id: ID!
+  creator: Bytes!
+  title: String!
+  createdAt: BigInt!
+  votes: [Vote!]! @derivedFrom(field: "proposal")
+}
+
+type Vote {
+  id: ID!
+  proposal: Proposal!
+  voter: Bytes!
+  support: Int!
+  timestamp: BigInt!
+}
+
+type ProposalVoters {
+  id: ID!
+  voters: [Bytes!]!
+}
+
+type RelationshipPair {
+  id: ID!
+  userA: Bytes!
+  userB: Bytes!
+  signalLabel: String!
+  evidenceCount: Int!
+  firstQualifiedAt: BigInt!
+  lastQualifiedAt: BigInt!
+  sharedProposals: [SharedProposal!]! @derivedFrom(field: "pair")
+  connection: VerifiedConnection
+}
+
+type SharedProposal {
+  id: ID!
+  pair: RelationshipPair!
+  proposalId: BigInt!
+  title: String!
+}
+
+type VerifiedConnection {
+  id: ID!
+  userA: Bytes!
+  userB: Bytes!
+  signalType: Bytes!
+  evidenceCount: Int!
+  firstQualifiedAt: BigInt!
+  lastQualifiedAt: BigInt!
+  evidenceRef: Bytes!
+  registeredAt: BigInt!
+  updatedAt: BigInt!
+}
+
+type Rhizome {
+  id: ID!
+  name: String!
+  signalType: Bytes!
+  freshnessPeriod: BigInt!
+  minimumConnections: Int!
+  creator: Bytes!
+  createdAt: BigInt!
+  bootstrapMembers: [BootstrapMember!]! @derivedFrom(field: "rhizome")
+}
+
+type BootstrapMember {
+  id: ID!
+  rhizome: Rhizome!
+  member: Bytes!
+  active: Boolean!
+  addedAt: BigInt!
+}
+
+type StakePosition {
+  id: ID!
+  staked: BigInt!
+  updatedAt: BigInt!
+}
+
+type StakeEvent {
+  id: ID!
+  user: Bytes!
+  amount: BigInt!
+  kind: String!
+  timestamp: BigInt!
+}

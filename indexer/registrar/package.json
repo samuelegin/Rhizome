@@ -1,0 +1,11 @@
+{
+  "name": "rhizome-registrar",
+  "version": "0.0.1",
+  "type": "module",
+  "scripts": {
+    "start": "node submit.js"
+  },
+  "dependencies": {
+    "viem": "^2.56.5"
+  }
+}
