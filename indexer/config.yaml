@@ -33,11 +33,11 @@ chains:
     start_block: 63102860
     contracts:
       - name: RioGovernance
-        address: "${RIO_GOVERNANCE_ADDRESS}"
+        address: "0x48D8896D16a7EA7ef71C5e615b1cDb44501AD610"
       - name: RioStaking
-        address: "${RIO_STAKING_ADDRESS}"
+        address: "0x3A4ab9f0Ba9f9DAA34d2DF0e7D70a72C54290aED"
       - name: RelationshipRegistry
-        address: "${RELATIONSHIP_REGISTRY_ADDRESS}"
+        address: "0xf4F6632872b827e85517904E891F149837953469"
       - name: RhizomeFactory
-        address: "${RHIZOME_FACTORY_ADDRESS}"
+        address: "0xCafb8e54d7A86a9d37158a5069624Aaac22Eb2BF"
       - name: Rhizome
