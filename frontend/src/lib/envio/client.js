@@ -1,5 +1,6 @@
 import { isActive, daysUntilStale } from '../formatters'
 import { CONTRACT_ADDRESSES, isDeployed } from '../contracts/addresses'
+import { SIGNAL_LABELS } from '../contracts/config'
 import { MOCK_ADDRESSES, MOCK_CONNECTIONS, MOCK_SECOND_HOP, MOCK_RHIZOME } from './mockData'
 
 export const ENVIO_ENDPOINT = import.meta.env.VITE_ENVIO_ENDPOINT || null
@@ -206,6 +207,7 @@ export async function getRhizomeQualification(rhizomeAddress, userAddress) {
       Rhizome_by_pk(id: $id) {
         id
         name
+        signalType
         freshnessPeriod
         minimumConnections
         creator
@@ -257,6 +259,7 @@ export async function getRhizomeQualification(rhizomeAddress, userAddress) {
     rhizome: {
       address: rhizomeRow.id,
       name: rhizomeRow.name,
+      signalLabel: SIGNAL_LABELS[rhizomeRow.signalType] ?? 'Unknown signal',
       minimumConnections: Number(rhizomeRow.minimumConnections),
       freshnessPeriodDays: Math.round(freshnessPeriodSeconds / 86400),
       creator: rhizomeRow.creator,

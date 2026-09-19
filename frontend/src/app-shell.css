@@ -669,6 +669,71 @@
 }
 
 /* ---------- Responsive ---------- */
+/* ---------- Rhizome detail ---------- */
+.rhizome-detail-eyebrow {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--gray-500);
+  margin: 0 0 6px;
+}
+
+.rhizome-detail-tagline {
+  font-size: 14px;
+  color: var(--gray-300);
+  margin: 8px 0 0;
+}
+
+.rhizome-detail-requirement {
+  font-size: 14px;
+  color: var(--gray-300);
+  margin: 0;
+}
+
+.rhizome-connections-table {
+  width: 100%;
+  border-collapse: collapse;
+  border: 1px solid var(--app-hairline);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.rhizome-connections-table th,
+.rhizome-connections-table td {
+  text-align: left;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--app-hairline);
+  font-size: 14px;
+}
+
+.rhizome-connections-table th {
+  color: var(--gray-500);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  background: var(--app-surface);
+}
+
+.rhizome-connections-table tr:last-child td {
+  border-bottom: none;
+}
+
+.rhizome-connection-none {
+  color: var(--gray-500);
+}
+
+.rhizome-memberspace-section p {
+  font-size: 14px;
+  color: var(--gray-300);
+  margin: 0 0 8px;
+}
+
+.rhizome-memberspace-address {
+  font-family: 'SF Mono', 'Consolas', monospace;
+  font-size: 13px;
+  color: var(--white);
+}
+
 @media (max-width: 860px) {
   .app-shell {
     flex-direction: column;
