@@ -475,8 +475,10 @@
 .network-graph-wrap {
   border: 1px solid var(--app-hairline);
   border-radius: 20px;
-  background: radial-gradient(circle at 50% 40%, var(--app-surface) 0%, var(--black) 75%);
+  background: radial-gradient(circle at 50% 40%, var(--app-surface) 0%, var(--black) 80%);
   padding: 8px;
+  max-width: 1160px;
+  margin: 0 auto;
 }
 
 .network-graph {
@@ -485,72 +487,86 @@
   display: block;
 }
 
-.graph-edge {
-  stroke: var(--app-hairline-strong);
-  stroke-width: 1.5;
+.network-graph-ambient .graph-edge {
+  stroke: var(--white);
+  stroke-width: 0.85;
+  stroke-opacity: 0.16;
 }
 
-.graph-edge.is-active {
-  stroke: rgba(255, 255, 255, 0.55);
+.network-graph-ambient .graph-edge.is-active {
+  stroke-opacity: 0.24;
 }
 
-.graph-edge.is-stale {
-  stroke: var(--app-hairline);
-  stroke-dasharray: 3 4;
+.network-graph-ambient .graph-edge.is-stale {
+  stroke-opacity: 0.1;
+  stroke-dasharray: 2 5;
 }
 
-.graph-edge-2 {
-  stroke-width: 1;
-}
-
-.graph-node circle {
-  fill: var(--app-surface-raised);
-  stroke: var(--app-hairline-strong);
-  stroke-width: 1.5;
-  transition: stroke 0.15s ease, fill 0.15s ease;
-}
-
-.graph-node text {
+.network-graph-ambient .graph-node circle {
   fill: var(--gray-300);
-  font-size: 11px;
-  font-family: 'General Sans', sans-serif;
+  fill-opacity: 0.55;
+  filter: drop-shadow(0 0 3px rgba(255, 255, 255, 0.25));
 }
 
-.graph-node.is-active circle {
-  stroke: #3ddc84;
+.network-graph-ambient .graph-node.is-active circle {
+  fill: #3ddc84;
+  fill-opacity: 0.7;
+  filter: drop-shadow(0 0 4px rgba(61, 220, 132, 0.4));
 }
 
-.graph-node.is-stale circle {
-  stroke: var(--app-hairline);
-  stroke-dasharray: 2 2;
-}
-
-.graph-node.is-stale text {
+.network-graph-ambient .graph-node.is-stale circle {
   fill: var(--gray-500);
+  fill-opacity: 0.35;
+  filter: none;
 }
 
-.graph-node.is-hovered circle,
-.graph-node:focus circle {
-  fill: var(--app-hairline-strong);
+.network-graph-ambient .graph-node.is-center circle {
+  fill: var(--white);
+  fill-opacity: 0.9;
+  filter: drop-shadow(0 0 6px rgba(255, 255, 255, 0.45));
 }
 
-.graph-node {
+/* ---------- Connections list ---------- */
+.connections-list {
+  list-style: none;
+  margin: 20px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.connections-list-row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: var(--app-surface);
+  border: 1px solid var(--app-hairline);
+  border-radius: 12px;
+  padding: 12px 16px;
+  color: var(--white);
+  font-family: inherit;
+  font-size: 14px;
   cursor: pointer;
+  text-align: left;
+  transition: border-color 0.15s ease;
+}
+
+.connections-list-row:hover,
+.connections-list-row:focus {
+  border-color: var(--app-hairline-strong);
   outline: none;
 }
 
-.graph-node-2 circle {
-  fill: var(--black);
-}
-
-.graph-node-center circle {
-  fill: var(--white);
-  stroke: var(--white);
-}
-
-.graph-node-center text {
-  fill: var(--white);
+.connections-list-peer {
   font-weight: 600;
+  min-width: 120px;
+}
+
+.connections-list-signal {
+  color: var(--gray-300);
+  flex: 1;
 }
 
 /* ---------- Connection detail panel ---------- */

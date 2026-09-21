@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { getNetwork, DEMO_MODE } from '../../lib/envio/client'
 import RequireWallet from '../../components/wallet/RequireWallet'
 import NetworkGraph from '../../components/graph/NetworkGraph'
+import ConnectionsList from '../../components/graph/ConnectionsList'
 import ConnectionDetailPanel from '../../components/connection/ConnectionDetailPanel'
 import DemoModeBanner from '../../components/ui/DemoModeBanner'
 
@@ -30,15 +31,20 @@ function NetworkContent() {
       </div>
 
       {networkQuery.data && (
-        <div className="network-graph-wrap">
-          <NetworkGraph
-            center={address}
-            connections={networkQuery.data.connections}
-            secondHop={networkQuery.data.secondHop}
-            showStale={showStale}
+        <>
+          <div className="network-graph-wrap">
+            <NetworkGraph
+              connections={networkQuery.data.connections}
+              secondHop={networkQuery.data.secondHop}
+              showStale={showStale}
+            />
+          </div>
+
+          <ConnectionsList
+            connections={networkQuery.data.connections.filter((c) => showStale || c.status === 'active')}
             onSelectConnection={setSelected}
           />
-        </div>
+        </>
       )}
 
       <ConnectionDetailPanel connection={selected} onClose={() => setSelected(null)} />
