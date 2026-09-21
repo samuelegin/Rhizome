@@ -734,6 +734,105 @@
   color: var(--white);
 }
 
+/* ---------- Create Rhizome ---------- */
+.create-page-tagline {
+  font-size: 14px;
+  color: var(--gray-300);
+  margin: -20px 0 32px;
+}
+
+.create-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  max-width: 440px;
+}
+
+.create-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--gray-300);
+}
+
+.create-field input {
+  background: var(--app-surface);
+  border: 1px solid var(--app-hairline-strong);
+  border-radius: 10px;
+  padding: 11px 14px;
+  color: var(--white);
+  font-size: 14px;
+  font-family: inherit;
+}
+
+.create-field input:focus {
+  outline: none;
+  border-color: var(--white);
+}
+
+.create-field input:disabled {
+  opacity: 0.5;
+}
+
+.create-bootstrap-input {
+  margin-top: 6px;
+}
+
+.create-bootstrap-input:first-of-type {
+  margin-top: 8px;
+}
+
+.create-warning {
+  font-size: 13px;
+  color: var(--gray-300);
+  background: var(--app-surface);
+  border: 1px dashed var(--app-hairline-strong);
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin: 0;
+}
+
+.create-error {
+  font-size: 13px;
+  color: var(--app-danger);
+  margin: 0;
+}
+
+.create-status {
+  font-size: 13px;
+  color: var(--gray-300);
+  margin: 0;
+}
+
+.create-submit {
+  align-self: flex-start;
+  background: var(--white);
+  color: var(--black);
+  border: none;
+  padding: 11px 22px;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.create-submit:hover:not(:disabled) {
+  opacity: 0.82;
+}
+
+.create-submit:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.create-footnote {
+  font-size: 13px;
+  color: var(--gray-500);
+  margin-top: 24px;
+  max-width: 440px;
+}
+
 @media (max-width: 860px) {
   .app-shell {
     flex-direction: column;
