@@ -9,11 +9,21 @@ export const DEMO_MODE = !ENVIO_ENDPOINT
 const DEFAULT_FRESHNESS_SECONDS = 30 * 86400
 
 async function query(document, variables) {
-  const response = await fetch(ENVIO_ENDPOINT, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ query: document, variables }),
-  })
+  let response
+  try {
+    response = await fetch(ENVIO_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query: document, variables }),
+    })
+  } catch (err) {
+    // Network-level failure: endpoint down, wrong URL, blocked by CORS, or http:// on an https site.
+    console.error('[rhizome] Cannot reach Envio endpoint:', ENVIO_ENDPOINT, err)
+    throw new Error(`Cannot reach indexer at ${ENVIO_ENDPOINT}`)
+  }
+  if (!response.ok) {
+    throw new Error(`Indexer returned HTTP ${response.status} from ${ENVIO_ENDPOINT}`)
+  }
   const { data, errors } = await response.json()
   if (errors) {
     throw new Error(errors.map((e) => e.message).join('; '))

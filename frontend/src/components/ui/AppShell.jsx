@@ -31,10 +31,6 @@ function AppShell() {
             </NavLink>
           ))}
         </nav>
-        <Link to="/app/demo" className="app-demo-link">
-          <i className="bi bi-lightning-charge" />
-          <span>Demo Environment</span>
-        </Link>
       </aside>
 
       <div className="app-main">

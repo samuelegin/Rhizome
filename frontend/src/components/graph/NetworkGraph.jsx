@@ -3,6 +3,14 @@ import '../../network-graph.css'
 import { truncateAddress } from '../../lib/formatters'
 
 const EMPTY = []
+
+// Node position in px inside the stage, correct even when the SVG is letterboxed.
+function screenPos(svg, stage, n) {
+  const ctm = svg && svg.getScreenCTM()
+  if (!ctm || !stage) return { left: `${(n.x / 1100) * 100}%`, top: `${(n.y / 620) * 100}%` }
+  const r = stage.getBoundingClientRect()
+  return { left: `${ctm.a * n.x + ctm.e - r.left}px`, top: `${ctm.d * n.y + ctm.f - r.top}px` }
+}
 const HIT_RADIUS = 22 // viewBox units around a node that count as hovering it
 const MOUSE_RADIUS = 120
 const MOUSE_PULL = 0.9 // nodes drift gently toward the cursor
@@ -96,6 +104,7 @@ function NetworkGraph({ center, connections = EMPTY, secondHop = EMPTY, showStal
   const graphRef = useRef(null)
   const inputsRef = useRef({})
   const svgRef = useRef(null)
+  const stageRef = useRef(null)
   const tipRef = useRef(null)
   const mouseRef = useRef({ x: 0, y: 0, active: false })
   const hoverIdRef = useRef(null)
@@ -210,8 +219,9 @@ function NetworkGraph({ center, connections = EMPTY, secondHop = EMPTY, showStal
       if (tipId && tipRef.current) {
         const tn = nodes.find((n) => n.id === tipId)
         if (tn) {
-          tipRef.current.style.left = `${(tn.x / WIDTH) * 100}%`
-          tipRef.current.style.top = `${(tn.y / HEIGHT) * 100}%`
+          const pos = screenPos(svgRef.current, stageRef.current, tn)
+          tipRef.current.style.left = pos.left
+          tipRef.current.style.top = pos.top
         }
       }
       links.forEach((link, i) => {
@@ -333,7 +343,7 @@ function NetworkGraph({ center, connections = EMPTY, secondHop = EMPTY, showStal
   const tipNode = nodes.find((n) => n.id === (pinned ? pinned.id : hoverId))
 
   return (
-    <div className="network-graph-stage">
+    <div className="network-graph-stage" ref={stageRef}>
     <svg
       ref={svgRef}
       onMouseMove={handleMove}
@@ -374,7 +384,7 @@ function NetworkGraph({ center, connections = EMPTY, secondHop = EMPTY, showStal
       <div
         ref={tipRef}
         className="graph-tip"
-        style={{ left: `${(tipNode.x / WIDTH) * 100}%`, top: `${(tipNode.y / HEIGHT) * 100}%` }}
+        style={screenPos(svgRef.current, stageRef.current, tipNode)}
       >
         <span className="graph-tip-label">{tipNode.label}</span>
         <code>{pinned && pinned.id === tipNode.id ? tipNode.address : truncateAddress(tipNode.address)}</code>
