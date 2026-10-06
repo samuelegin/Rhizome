@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import '../../network-graph.css'
 import { truncateAddress } from '../../lib/formatters'
 
 const EMPTY = []
