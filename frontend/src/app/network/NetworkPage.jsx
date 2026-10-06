@@ -30,16 +30,29 @@ function NetworkContent() {
         </label>
       </div>
 
+      {/* The graph always renders (your wallet is the centre node), even while loading or if the indexer fails. */}
+      <div className="network-graph-wrap">
+        <NetworkGraph
+          center={address}
+          connections={networkQuery.data?.connections}
+          secondHop={networkQuery.data?.secondHop}
+          showStale={showStale}
+          onSelectConnection={setSelected}
+        />
+      </div>
+
+      {networkQuery.isLoading && <p className="network-status">Loading your network…</p>}
+      {networkQuery.isError && (
+        <p className="network-status is-error">
+          Couldn&apos;t load connections from the indexer ({networkQuery.error?.message}). Showing your wallet only.
+        </p>
+      )}
+      {networkQuery.data && networkQuery.data.connections.length === 0 && (
+        <p className="network-status">No connections yet for this wallet.</p>
+      )}
+
       {networkQuery.data && (
         <>
-          <div className="network-graph-wrap">
-            <NetworkGraph
-              connections={networkQuery.data.connections}
-              secondHop={networkQuery.data.secondHop}
-              showStale={showStale}
-            />
-          </div>
-
           <ConnectionsList
             connections={networkQuery.data.connections.filter((c) => showStale || c.status === 'active')}
             onSelectConnection={setSelected}

@@ -1,4 +1,10 @@
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { truncateAddress } from '../../lib/formatters'
+
+const EMPTY = []
+const HIT_RADIUS = 22 // viewBox units around a node that count as hovering it
+const MOUSE_RADIUS = 120
+const MOUSE_PULL = 0.9 // nodes drift gently toward the cursor
 
 const WIDTH = 1100
 const HEIGHT = 620
@@ -21,7 +27,7 @@ function nodeRadius({ isCenter, evidenceCount = 1 }) {
   return evidenceCount >= 3 ? 8 : 6
 }
 
-function reconcileGraph(existing, connections, secondHop) {
+function reconcileGraph(existing, connections, secondHop, centerAddress) {
   const previousNodes = existing ? new Map(existing.nodes.map((n) => [n.id, n])) : new Map()
   const nodes = new Map()
   const links = []
@@ -65,10 +71,18 @@ function reconcileGraph(existing, connections, secondHop) {
     links.push({ source: viaKey, target: key, status: c.status })
   })
 
-  return { nodes: Array.from(nodes.values()), links }
+  // Wallet info for the hover/click tooltip.
+  const directKeys = new Set(connections.map((c) => c.peer.toLowerCase()))
+  const list = Array.from(nodes.values())
+  list.forEach((n) => {
+    n.address = n.isCenter ? centerAddress || '' : n.id
+    n.label = n.isCenter ? 'You' : directKeys.has(n.id) ? 'Connection' : 'Friend of a connection'
+  })
+
+  return { nodes: list, links }
 }
 
-function NetworkGraph({ connections, secondHop = [], showStale = true }) {
+function NetworkGraph({ center, connections = EMPTY, secondHop = EMPTY, showStale = true, onSelectConnection }) {
   const visibleConnections = useMemo(
     () => connections.filter((c) => showStale || c.status === 'active'),
     [connections, showStale]
@@ -79,12 +93,16 @@ function NetworkGraph({ connections, secondHop = [], showStale = true }) {
   )
 
   const graphRef = useRef(null)
+  const inputsRef = useRef({})
+  const svgRef = useRef(null)
+  const tipRef = useRef(null)
+  const mouseRef = useRef({ x: 0, y: 0, active: false })
+  const hoverIdRef = useRef(null)
+  const pinnedIdRef = useRef(null)
+  const [hoverId, setHoverId] = useState(null)
+  const [pinned, setPinned] = useState(null) // { id, copied }
   const nodeElRefs = useRef(new Map())
   const linkElRefs = useRef(new Map())
-
-  useEffect(() => {
-    graphRef.current = reconcileGraph(graphRef.current, visibleConnections, visibleSecondHop)
-  }, [visibleConnections, visibleSecondHop])
 
   useEffect(() => {
     const reduceMotionQuery = window.matchMedia('(prefers-reduced-motion: reduce)')
@@ -149,6 +167,19 @@ function NetworkGraph({ connections, secondHop = [], showStale = true }) {
         n.vx += (Math.random() - 0.5) * JITTER
         n.vy += (Math.random() - 0.5) * JITTER
 
+        // Interactive: nodes near the cursor drift toward it (stop at the pointer).
+        const m = mouseRef.current
+        if (m.active) {
+          const mx = m.x - n.x
+          const my = m.y - n.y
+          const md = Math.sqrt(mx * mx + my * my)
+          if (md < MOUSE_RADIUS && md > 14) {
+            const pull = (1 - md / MOUSE_RADIUS) * MOUSE_PULL
+            n.x += (mx / md) * pull
+            n.y += (my / md) * pull
+          }
+        }
+
         if (n.x < BOUNDS_MARGIN) n.vx += BOUNDS_PUSH * (BOUNDS_MARGIN - n.x)
         if (n.x > WIDTH - BOUNDS_MARGIN) n.vx -= BOUNDS_PUSH * (n.x - (WIDTH - BOUNDS_MARGIN))
         if (n.y < BOUNDS_MARGIN) n.vy += BOUNDS_PUSH * (BOUNDS_MARGIN - n.y)
@@ -174,6 +205,14 @@ function NetworkGraph({ connections, secondHop = [], showStale = true }) {
         const el = nodeElRefs.current.get(n.id)
         if (el) el.setAttribute('transform', `translate(${n.x}, ${n.y})`)
       })
+      const tipId = pinnedIdRef.current || hoverIdRef.current
+      if (tipId && tipRef.current) {
+        const tn = nodes.find((n) => n.id === tipId)
+        if (tn) {
+          tipRef.current.style.left = `${(tn.x / WIDTH) * 100}%`
+          tipRef.current.style.top = `${(tn.y / HEIGHT) * 100}%`
+        }
+      }
       links.forEach((link, i) => {
         const el = linkElRefs.current.get(i)
         const a = nodes.find((n) => n.id === link.source)
@@ -223,14 +262,83 @@ function NetworkGraph({ connections, secondHop = [], showStale = true }) {
     }
   }, [])
 
-  if (!graphRef.current) {
-    graphRef.current = reconcileGraph(null, visibleConnections, visibleSecondHop)
+  // Reconcile during render so wallets that arrive after mount show up at once.
+  const inputs = inputsRef.current
+  if (
+    !graphRef.current ||
+    inputs.c !== visibleConnections ||
+    inputs.s !== visibleSecondHop ||
+    inputs.center !== center
+  ) {
+    graphRef.current = reconcileGraph(graphRef.current, visibleConnections, visibleSecondHop, center)
+    inputsRef.current = { c: visibleConnections, s: visibleSecondHop, center }
   }
 
   const { nodes, links } = graphRef.current
 
+  function toSvgPoint(e) {
+    const svg = svgRef.current
+    const pt = svg.createSVGPoint()
+    pt.x = e.clientX
+    pt.y = e.clientY
+    return pt.matrixTransform(svg.getScreenCTM().inverse())
+  }
+
+  function handleMove(e) {
+    if (!svgRef.current) return
+    const p = toSvgPoint(e)
+    mouseRef.current = { x: p.x, y: p.y, active: true }
+    let best = null
+    let bestD = Infinity
+    for (const n of graphRef.current.nodes) {
+      const d = Math.hypot(n.x - p.x, n.y - p.y)
+      if (d < HIT_RADIUS + n.radius && d < bestD) {
+        best = n
+        bestD = d
+      }
+    }
+    const id = best ? best.id : null
+    if (id !== hoverIdRef.current) {
+      hoverIdRef.current = id
+      setHoverId(id)
+    }
+  }
+
+  function handleLeave() {
+    mouseRef.current.active = false
+    hoverIdRef.current = null
+    setHoverId(null)
+  }
+
+  function handleClick() {
+    const n = graphRef.current.nodes.find((x) => x.id === hoverIdRef.current)
+    if (!n) {
+      pinnedIdRef.current = null
+      setPinned(null)
+      return
+    }
+    pinnedIdRef.current = n.id
+    setPinned({ id: n.id, copied: false })
+    if (n.address && navigator.clipboard?.writeText) {
+      navigator.clipboard
+        .writeText(n.address)
+        .then(() => setPinned((p) => (p && p.id === n.id ? { ...p, copied: true } : p)))
+        .catch(() => {})
+    }
+    const conn = connections.find((c) => c.peer.toLowerCase() === n.id)
+    if (conn && onSelectConnection) onSelectConnection(conn)
+  }
+
+  const tipNode = nodes.find((n) => n.id === (pinned ? pinned.id : hoverId))
+
   return (
+    <div className="network-graph-stage">
     <svg
+      ref={svgRef}
+      onMouseMove={handleMove}
+      onMouseLeave={handleLeave}
+      onClick={handleClick}
+      style={{ cursor: hoverId ? 'pointer' : 'default' }}
       viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
       className="network-graph network-graph-ambient"
       role="img"
@@ -252,13 +360,33 @@ function NetworkGraph({ connections, secondHop = [], showStale = true }) {
         <g
           key={n.id}
           ref={(el) => nodeElRefs.current.set(n.id, el)}
-          className={`graph-node ${n.isCenter ? 'is-center' : n.status === 'active' ? 'is-active' : 'is-stale'}`}
+          className={`graph-node ${n.isCenter ? 'is-center' : n.status === 'active' ? 'is-active' : 'is-stale'}${
+            n.id === hoverId || (pinned && n.id === pinned.id) ? ' is-hover' : ''
+          }`}
           transform={`translate(${n.x}, ${n.y})`}
         >
           <circle r={n.radius} />
         </g>
       ))}
     </svg>
+    {tipNode && tipNode.address && (
+      <div
+        ref={tipRef}
+        className="graph-tip"
+        style={{ left: `${(tipNode.x / WIDTH) * 100}%`, top: `${(tipNode.y / HEIGHT) * 100}%` }}
+      >
+        <span className="graph-tip-label">{tipNode.label}</span>
+        <code>{pinned && pinned.id === tipNode.id ? tipNode.address : truncateAddress(tipNode.address)}</code>
+        <span className="graph-tip-hint">
+          {pinned && pinned.id === tipNode.id
+            ? pinned.copied
+              ? 'Copied ✓'
+              : 'Click empty space to close'
+            : 'Click to copy full address'}
+        </span>
+      </div>
+    )}
+    </div>
   )
 }
 
