@@ -20,7 +20,7 @@ A **Rhizome** defines what relationship signal qualifies, how long that relation
 
 > **Envio explains. Monad decides.**
 
-> Built for **Monad Metropolis** · Social / Culture track · Monad Testnet (chain ID `10143`)
+> Built for **Monad Metropolis** · Social / Culture track · Monad Testnet (chain ID `10143`) · [Why Monad?](#why-monad)
 
 ---
 
@@ -29,27 +29,28 @@ A **Rhizome** defines what relationship signal qualifies, how long that relation
 1. [Overview](#overview)
 2. [The Problem](#the-problem)
 3. [The Solution](#the-solution)
-4. [How It Works](#how-it-works)
-5. [Repository Structure](#repository-structure)
-6. [Architecture](#architecture)
-7. [Smart Contracts](#smart-contracts)
-8. [Membership Model](#membership-model)
-9. [Freshness Model](#freshness-model)
-10. [Trust Model](#trust-model)
-11. [The Indexer (Envio)](#the-indexer-envio)
-12. [The Registrar Bot](#the-registrar-bot)
-13. [Frontend](#frontend)
-14. [Live Deployment: Monad Testnet](#live-deployment-monad-testnet)
-15. [Getting Started](#getting-started)
-16. [Configuration Reference](#configuration-reference)
-17. [Testing](#testing)
-18. [Integrating Rhizome in Your Contract](#integrating-rhizome-in-your-contract)
-19. [Use Cases](#use-cases)
-20. [Design Decisions & Tradeoffs](#design-decisions--tradeoffs)
-21. [Known Limitations](#known-limitations)
-22. [Status & Roadmap](#status--roadmap)
-23. [Tech Stack](#tech-stack)
-24. [Team](#team)
+4. [Why Monad](#why-monad)
+5. [How It Works](#how-it-works)
+6. [Repository Structure](#repository-structure)
+7. [Architecture](#architecture)
+8. [Smart Contracts](#smart-contracts)
+9. [Membership Model](#membership-model)
+10. [Freshness Model](#freshness-model)
+11. [Trust Model](#trust-model)
+12. [The Indexer (Envio)](#the-indexer-envio)
+13. [The Registrar Bot](#the-registrar-bot)
+14. [Frontend](#frontend)
+15. [Live Deployment: Monad Testnet](#live-deployment-monad-testnet)
+16. [Getting Started](#getting-started)
+17. [Configuration Reference](#configuration-reference)
+18. [Testing](#testing)
+19. [Integrating Rhizome in Your Contract](#integrating-rhizome-in-your-contract)
+20. [Use Cases](#use-cases)
+21. [Design Decisions & Tradeoffs](#design-decisions--tradeoffs)
+22. [Known Limitations](#known-limitations)
+23. [Status & Roadmap](#status--roadmap)
+24. [Tech Stack](#tech-stack)
+25. [Team](#team)
 
 ---
 
@@ -112,6 +113,34 @@ Rhizome makes membership a **pure function of fresh relationship evidence**:
 4. **Fresh.** A connection counts only inside the Rhizome's freshness window, measured from the last qualifying activity.
 5. **Derived on read.** There is no stored "is member" flag for normal members. `isMember()` is recomputed every time, so expiry is automatic.
 6. **Enforceable.** Other contracts call `isMember()` directly. No oracle, no off-chain lookup.
+
+---
+
+## Why Monad
+
+Rhizome is built on Monad because its core idea, **membership that is recomputed from live relationships on every call**, only works if the chain makes reads cheap, writes plentiful and state fresh. Monad is the first EVM chain where that design is practical rather than a gas problem.
+
+| What Rhizome needs | Why it matters | What Monad gives it |
+|---|---|---|
+| **Cheap, constant on-chain reads and checks** | `isMember()` loops over up to 3 anchors and reads the registry up to 3 times. It is meant to sit inside a modifier on *every* interaction (see `MemberSpace.post()`), not be called once and cached. | Low execution cost and high throughput make a per-call membership check affordable, so there is no need to cache a stored flag that can go stale. |
+| **State that is current within a block** | Freshness is `block.timestamp <= lastQualifiedAt + freshnessPeriod`. A member can lapse at any second, and the next call must see it. | Fast blocks (published target: ~400 ms) mean the chain's clock, and therefore the membership answer, moves in sub-second steps. Expiry is enforced almost as it happens. |
+| **Fast finality for a live UI** | The My Network graph, connection badges and membership checklist should reflect a new Verified Connection right away, not minutes later. | Quick finality (published target: ~800 ms) lets the indexer and frontend show registrations as they land, so the graph feels alive. |
+| **Room for many connections** | One shared `RelationshipRegistry` stores every pair, and the registrar keeps writing as new evidence appears. The graph only becomes useful when it is dense. | High throughput and cheap gas make writing and renewing connections at community scale viable. Different pairs write to different storage slots, so independent registrations rarely conflict under parallel execution. |
+| **Standard EVM tooling** | The contracts are plain Solidity, tested with Foundry, wired to wagmi and WalletConnect, and indexed by Envio. | Full EVM bytecode compatibility means no new language, VM or wallet flow. Everything here is the normal Ethereum toolchain pointed at Monad (chain ID `10143` on testnet). |
+
+### Why this fits the Social / Culture track
+
+The track is about open social graphs, programmable incentives and fast settlement. Rhizome is an open social graph whose edges are evidence-backed and expire on their own, and whose membership gates real on-chain rights (posting, minting, voting). Those rights only feel responsive if the underlying chain settles quickly and cheaply.
+
+### The same design on a slower, costlier chain
+
+- A per-call `isMember()` check becomes an expense, pushing designs toward cached membership flags, which is exactly the stale-state problem Rhizome exists to remove.
+- Slow blocks and finality delay the moment a lapse or a new connection becomes visible, so the graph feels like a nightly report rather than a live network.
+- Keeping connections renewed at scale would mean batching, keepers or off-chain shortcuts, which weakens the trust model.
+
+> **Envio explains. Monad decides.** Envio gives the history and context, and Monad is where the authoritative, enforceable answer lives, at a speed and price that lets it be asked every time.
+
+> The Monad figures above are the network's published targets; see the [Monad documentation](https://docs.monad.xyz) for current numbers.
 
 ---
 
