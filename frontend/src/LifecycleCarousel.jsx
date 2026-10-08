@@ -4,22 +4,22 @@ const SLIDES = [
   {
     n: '01',
     title: 'Relationships',
-    body: 'Membership begins with real connections. Rhizome evaluates verifiable relationships that exist within the network rather than relying on a static list.',
+    body: 'Membership begins with real connections. Rhizome evaluates the relationships that exist in the network instead of relying on a static list.',
   },
   {
     n: '02',
     title: 'Requirement',
-    body: 'A community sets a membership requirement \u2014 a relationship signal, a freshness window, and how many active connections with its anchors are needed.',
+    body: 'A community sets its requirement: which relationship signal counts, how fresh it must be, and how many active connections to its anchors are needed.',
   },
   {
     n: '03',
     title: 'Membership',
-    body: 'When the requirement is met, membership becomes active. It is a derived state that can become inactive again if a connection goes stale.',
+    body: 'When the requirement is met, you\u2019re a member. Membership is derived, so it lapses if connections go stale.',
   },
   {
     n: '04',
     title: 'Rights',
-    body: 'Active membership becomes a programmable right \u2014 usable for voting, resources, and rewards by any application that reads it.',
+    body: 'Membership becomes a programmable right that any contract can read to gate voting, resources, and rewards.',
   },
 ]
 

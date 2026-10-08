@@ -6,16 +6,21 @@ import ProtocolJourney from '../ProtocolJourney'
 import UseCaseScroll from '../UseCaseScroll'
 import { Link } from 'react-router-dom'
 import { useEffect, useRef, useState } from 'react'
+import logoWhite from '../assets/brand/rhizome-logo-white.png'
 
-const NAV_LINKS = ['Protocol', 'Docs', 'Ecosystem', 'About']
+const NAV_LINKS = [
+  { label: 'Protocol', href: '#protocol' },
+  { label: 'Developers', href: '#developers' },
+  { label: 'Use cases', href: '#use-cases' },
+]
 
 
 const ARCHITECTURE_LAYERS = [
-  { title: 'Rio', body: 'Governance and staking activity \u2014 the evidence environment relationships are drawn from.' },
-  { title: 'Envio', body: 'Indexes that activity and derives relationship signals from it.' },
-  { title: 'Verified Connections', body: 'Signals backed by evidence and a freshness window become verified, pairwise connections.' },
-  { title: 'Rhizome', body: 'Reads active connections against a community\u2019s anchors to derive membership.' },
-  { title: 'Monad', body: 'Records canonical connections and enforces membership-sensitive rights onchain.' },
+  { title: 'Rio', body: 'Governance and staking activity \u2014 the evidence that relationships are drawn from.' },
+  { title: 'Envio', body: 'Indexes that activity and derives relationship signals from it. A registrar submits the qualifying ones onchain.' },
+  { title: 'Verified Connections', body: 'Signals accepted by the registrar are stored onchain as pairwise connections, each with a freshness window.' },
+  { title: 'Rhizome', body: 'Checks a wallet\u2019s active connections to the community\u2019s anchors and derives membership live.' },
+  { title: 'Monad', body: 'Stores the canonical connection state and lets contracts enforce rights based on membership.' },
 ]
 
 // Reveals a headline with a fast, cinematic "speedster" drop: the
@@ -53,38 +58,41 @@ function useDropReveal() {
 }
 
 const CONDITION_TABS = [
-  { key: 'evidence', label: 'Evidence', body: 'Every Verified Connection is backed by evidence \u2014 like shared governance participation on Rio \u2014 rather than a subjective judgment.' },
-  { key: 'signal', label: 'Signal', body: 'A Rhizome defines the relationship signal it looks for. The MVP signal is shared governance participation between two wallets.' },
-  { key: 'freshness', label: 'Freshness', body: 'A connection only counts while it\u2019s active. Once qualifying activity falls outside the freshness window, the connection goes stale.' },
-  { key: 'anchors', label: 'Anchors', body: 'A Rhizome starts with up to three bootstrap members who act as anchors. Membership is derived from active connections with those anchors.' },
+  { key: 'evidence', label: 'Evidence', body: 'Every Verified Connection is backed by observable evidence, like shared governance participation on Rio, rather than a subjective judgment.' },
+  { key: 'signal', label: 'Signal', body: 'Each Rhizome defines the relationship signal it counts. In the MVP, that signal is two wallets voting on the same Rio proposal.' },
+  { key: 'freshness', label: 'Freshness', body: 'A connection only counts while it is fresh. Once its last qualifying activity falls outside the freshness window, the connection goes stale and stops counting.' },
+  { key: 'anchors', label: 'Anchors', body: 'Each Rhizome starts with up to three anchor wallets. A wallet qualifies by holding enough active connections to those anchors.' },
 ]
 
 const COMPARISON = [
-  ['Admin decides who belongs', 'Verified connections decide who belongs'],
+  ['An admin decides who belongs', 'Active connections decide who belongs'],
   ['Static member list', 'Derived membership'],
-  ['Manual approval', 'Connection evaluation'],
-  ['Manual removal', 'Membership becomes inactive'],
-  ['Platform-specific roles', 'Shared, verifiable state'],
+  ['Manual approval', 'Live evaluation of connections'],
+  ['Manual removal', 'Membership lapses when connections go stale'],
+  ['Platform-specific roles', 'Shared onchain state'],
   ['Membership is assigned', 'Membership is derived'],
 ]
 
 const DEV_INTEGRATIONS = [
-  { icon: 'bi-code-slash', title: 'Read membership directly onchain', body: 'Call checkMembership from your own contract \u2014 no oracle, no offchain indexer required.' },
-  { icon: 'bi-diagram-3', title: 'Compose rights into your app', body: 'Gate a mint, a vote, or a payout on live Rhizome membership instead of a static allowlist.' },
-  { icon: 'bi-arrow-repeat', title: 'React to relationship changes', body: 'Membership changes emit a contract event \u2014 build logic that updates the moment a relationship expires or is revoked.' },
-  { icon: 'bi-lightning-charge', title: 'Built for Monad throughput', body: 'Frequent relationship and membership updates stay cheap enough to re-check on every interaction.' },
+  { icon: 'bi-code-slash', title: 'Read membership directly onchain', body: 'Call isMember from your own contract. No oracle or offchain lookup required.' },
+  { icon: 'bi-diagram-3', title: 'Compose rights into your app', body: 'Gate a mint, a vote, or a payout on live membership instead of a static allowlist.' },
+  { icon: 'bi-arrow-repeat', title: 'Track new connections', body: 'The registry emits an event whenever a connection is registered or renewed. Expiry needs no transaction: membership simply stops evaluating as true.' },
+  { icon: 'bi-lightning-charge', title: 'Built for Monad', body: 'Membership is evaluated live rather than cached, and Monad keeps that cheap enough to check on every interaction.' },
 ]
 
 const IRHIZOME_INTERFACE = `interface IRhizome {
-  function checkMembership(
-    address wallet,
-    bytes32 rhizomeId
-  ) external returns (bool active);
+  // True if the wallet is an anchor, or has enough
+  // active connections to the anchors right now.
+  function isMember(address user) external view returns (bool);
+}
 
-  function membershipOf(
-    address wallet,
-    bytes32 rhizomeId
-  ) external view returns (bool active, uint64 since);
+contract CommunityApp {
+  IRhizome public rhizome;
+
+  modifier onlyMember() {
+    require(rhizome.isMember(msg.sender), "Not a member");
+    _;
+  }
 }`
 
 function Landing() {
@@ -97,13 +105,12 @@ function Landing() {
     <div className="page">
       <div className="nav-wrap">
         <header className="nav">
-          <div className="brand">
-            <i className="bi bi-diagram-3-fill" />
-            <span>Rhizome</span>
-          </div>
+          <Link to="/" className="brand" aria-label="Rhizome home">
+            <img src={logoWhite} alt="Rhizome" className="brand-logo" />
+          </Link>
           <nav className="nav-links">
             {NAV_LINKS.map((link) => (
-              <a key={link} href="#">{link}</a>
+              <a key={link.label} href={link.href}>{link.label}</a>
             ))}
           </nav>
           <div className="nav-actions">
@@ -121,7 +128,7 @@ function Landing() {
         {mobileNavOpen && (
           <nav className="nav-mobile-menu">
             {NAV_LINKS.map((link) => (
-              <a key={link} href="#" onClick={() => setMobileNavOpen(false)}>{link}</a>
+              <a key={link.label} href={link.href} onClick={() => setMobileNavOpen(false)}>{link.label}</a>
             ))}
           </nav>
         )}
@@ -135,17 +142,17 @@ function Landing() {
           <div className="hero-content">
             <p className="hero-eyebrow">Monad Metropolis · Social / Culture</p>
             <h1>
-              Membership, proven
+              Membership, derived
               <br />
               not assigned.
             </h1>
             <p className="hero-sub">
-              A community isn't a list of approved addresses. It's a set of verified
-              connections. When enough of them are active, membership emerges.
+              A community isn't a list of approved addresses. It's a set of live
+              relationships. When enough of them are active, membership follows.
             </p>
             <div className="hero-actions">
               <Link to="/app" className="btn-primary">Launch app <i className="bi bi-arrow-right" /></Link>
-              <button className="btn-ghost">Read the docs</button>
+              <a href="#developers" className="btn-ghost">For developers</a>
             </div>
           </div>
         </section>
@@ -155,12 +162,12 @@ function Landing() {
           <h2 className="section-heading">The graph can become the membership system.</h2>
           <p className="section-sub">
             Relationships form, go stale, and are evaluated against each community's
-            membership requirement. Membership changes with the graph.
+            requirement. Membership follows the graph.
           </p>
           <Carousel />
         </section>
 
-        <section className="section-block lifecycle">
+        <section className="section-block lifecycle" id="protocol">
           <div className="lifecycle-bg" />
           <p className="eyebrow light">Protocol lifecycle</p>
           <h2 className="section-heading light">
@@ -175,9 +182,9 @@ function Landing() {
           <p className="eyebrow">How Rhizome works</p>
           <h2 className="section-heading">Membership is a derived state.</h2>
           <p className="section-sub">
-            You aren't permanently added to a Rhizome. Your active connections are evaluated
-            against its membership requirement. If you qualify, your membership is active. If
-            your connections go stale, it becomes inactive.
+            You aren't permanently added to a Rhizome. Your active connections are checked
+            against its requirement each time. If you qualify, you're a member. If your
+            connections go stale, you're not.
           </p>
           <ProtocolJourney />
         </section>
@@ -219,8 +226,8 @@ function Landing() {
             </div>
           </div>
           <p className="graph-note">
-            Rhizome doesn't create social relationships. It evaluates what they mean for a
-            community.
+            Rhizome doesn't create relationships. It lets each community decide what they
+            mean.
           </p>
         </section>
 
@@ -300,11 +307,11 @@ function Landing() {
           <p className="scale-editorial-rights">Voting · Resources · Rewards</p>
         </section>
 
-        <section className="section-block">
+        <section className="section-block" id="developers">
           <h2 className="section-heading">Integrate Rhizome into your app.</h2>
           <p className="section-sub">
-            Membership isn't a UI badge. It's shared, verifiable state that applications and
-            contracts can independently evaluate.
+            Membership isn't a UI badge. It's onchain state that any application or
+            contract can read and enforce on its own.
           </p>
           <div className="dev-layout">
             <div className="dev-list">
@@ -329,11 +336,11 @@ function Landing() {
             </div>
           </div>
           <div className="hero-actions dev-cta">
-            <button className="btn-primary">View developer docs <i className="bi bi-arrow-right" /></button>
+            <Link to="/app/demo" className="btn-primary">Try the live demo <i className="bi bi-arrow-right" /></Link>
           </div>
         </section>
 
-        <section className="section-block alt usecase-section">
+        <section className="section-block alt usecase-section" id="use-cases">
           <h2 className="section-heading">Where it starts</h2>
           <UseCaseScroll />
         </section>
@@ -346,8 +353,8 @@ function Landing() {
           </h2>
           <p>Build communities that evolve through real relationships.</p>
           <div className="hero-actions center">
-            <Link to="/app" className="btn-primary">Launch Rhizome <i className="bi bi-arrow-right" /></Link>
-            <button className="btn-ghost-dark">Read the docs</button>
+            <Link to="/app" className="btn-primary">Launch app <i className="bi bi-arrow-right" /></Link>
+            <a href="#developers" className="btn-ghost-dark">For developers</a>
           </div>
         </section>
       </main>

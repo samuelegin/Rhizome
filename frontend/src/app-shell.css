@@ -48,6 +48,11 @@
   font-size: 18px;
 }
 
+.app-brand .brand-logo {
+  height: 36px;
+  margin: -6px 0 -6px -6px;
+}
+
 .app-nav {
   display: flex;
   flex-direction: column;

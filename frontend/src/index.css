@@ -41,3 +41,12 @@ a {
 button {
   font-family: inherit;
 }
+
+/* In-page anchors from the landing nav */
+html {
+  scroll-behavior: smooth;
+}
+
+[id] {
+  scroll-margin-top: 96px;
+}

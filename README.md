@@ -1,6 +1,12 @@
-# Rhizome
+<p align="center">
+  <img src="frontend/public/logo.png" alt="Rhizome" width="360" />
+</p>
 
-### Communities that form from relationships, not ownership.
+<h3 align="center">Communities that form from relationships, not ownership.</h3>
+
+<p align="center">
+  Live on <b>Monad Testnet</b> · MIT licensed · Built for Monad Metropolis (Social / Culture)
+</p>
 
 **Rhizome is a protocol for programmable, relationship-derived membership.**
 
@@ -15,6 +21,132 @@ rhizome.isMember(user)
 Any contract can use that result to gate rights such as posting, voting, minting, claiming, or participating.
 
 > **Relationships become state. Membership becomes policy. Rights become enforceable.**
+
+---
+
+# Getting started
+
+Rhizome has four parts. You only need the ones relevant to what you are doing:
+
+| I want to...                           | Set up                          |
+| -------------------------------------- | ------------------------------- |
+| Try the app against the live testnet   | [Frontend](#3-frontend) only    |
+| Build on or test the contracts         | [Contracts](#1-contracts)       |
+| Run my own indexer + registrar         | [Indexer](#2-indexer-and-registrar) |
+
+## Prerequisites
+
+| Tool                                              | Needed for              |
+| ------------------------------------------------- | ----------------------- |
+| [Node.js](https://nodejs.org) 20+ and npm         | Frontend, registrar     |
+| [pnpm](https://pnpm.io/installation)              | Indexer                 |
+| [Foundry](https://getfoundry.sh)                  | Contracts               |
+| [Docker](https://docs.docker.com/get-docker/)     | Running the Envio indexer locally |
+| A wallet with Monad Testnet MON                   | Deploying / registering |
+
+Install Foundry with:
+
+```bash
+curl -L https://foundry.paradigm.xyz | bash
+foundryup
+```
+
+## Clone
+
+```bash
+git clone https://github.com/<your-username>/Rhizome.git
+cd Rhizome
+```
+
+Replace the URL with this repository's address. If the `contracts/lib` folder is empty after cloning, pull the submodules:
+
+```bash
+git submodule update --init --recursive
+```
+
+## 1. Contracts
+
+```bash
+cd contracts
+forge install          # only needed if contracts/lib is empty
+forge build
+forge test
+```
+
+`forge build` downloads the pinned `solc 0.8.26` automatically.
+
+To deploy your own copy to Monad Testnet:
+
+```bash
+cp .env.example .env   # fill in keys and addresses
+source .env
+forge script script/Deploy.s.sol \
+  --rpc-url https://testnet-rpc.monad.xyz \
+  --broadcast
+```
+
+Never commit a `.env` file that contains a private key.
+
+## 2. Indexer and registrar
+
+Skip this section if you are happy to use the deployed testnet contracts and an existing indexer endpoint.
+
+**Indexer (Envio HyperIndex)**
+
+```bash
+cd indexer
+cp .env.example .env   # add the contract addresses from your deploy
+pnpm install
+pnpm codegen
+pnpm dev               # starts the indexer and a local GraphQL playground
+```
+
+Once it is synced, note the GraphQL URL. The frontend and registrar both need it.
+
+**Registrar bot**
+
+```bash
+cd indexer/registrar
+cp .env.example .env   # ENVIO_ENDPOINT, RELATIONSHIP_REGISTRY_ADDRESS, PRIVATE_KEY
+npm install
+npm start
+```
+
+`PRIVATE_KEY` must belong to the address currently set as the `RelationshipRegistry` registrar. The bot polls the indexer and submits qualifying connections onchain. See [`indexer/README.md`](indexer/README.md) for details.
+
+## 3. Frontend
+
+```bash
+cd frontend
+cp .env.example .env.local
+npm install
+npm run dev
+```
+
+Then open the URL Vite prints (usually `http://localhost:5173`).
+
+| Variable                          | Purpose                                                                 |
+| --------------------------------- | ----------------------------------------------------------------------- |
+| `VITE_WALLETCONNECT_PROJECT_ID`   | Your own project ID from [WalletConnect Cloud](https://cloud.reown.com). Without it, only injected wallets such as MetaMask work. |
+| `VITE_ENVIO_ENDPOINT`             | GraphQL URL of the indexer. Leave empty to run the app in demo mode with mock data. |
+
+Production build:
+
+```bash
+npm run build
+npm run preview
+```
+
+The app deploys to Vercel as-is (`vercel.json` already rewrites all routes to `index.html`).
+
+## 4. Add Monad Testnet to your wallet
+
+| Setting         | Value                              |
+| --------------- | ---------------------------------- |
+| Network name    | Monad Testnet                      |
+| RPC URL         | `https://testnet-rpc.monad.xyz`    |
+| Chain ID        | `10143`                            |
+| Currency symbol | `MON`                              |
 
 ---
 

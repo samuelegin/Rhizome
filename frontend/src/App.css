@@ -35,6 +35,14 @@
   font-size: 20px;
 }
 
+.brand-logo {
+  display: block;
+  height: 40px;
+  width: auto;
+  /* the logo asset carries built-in padding; pull it back so the nav stays tight */
+  margin: -6px 0;
+}
+
 .nav-links {
   display: flex;
   gap: 36px;
@@ -95,6 +103,8 @@
 }
 
 .btn-ghost {
+  display: inline-flex;
+  align-items: center;
   background: transparent;
   color: var(--black);
   border: 1px solid var(--hairline);
@@ -111,6 +121,8 @@
 }
 
 .btn-ghost-dark {
+  display: inline-flex;
+  align-items: center;
   background: transparent;
   color: var(--white);
   border: 1px solid rgba(255, 255, 255, 0.28);
@@ -1594,4 +1606,11 @@
   .carousel-text h3 {
     font-size: 22px;
   }
+}
+
+/* Primary button on light sections (default style is white-on-dark) */
+.hero .btn-primary,
+.dev-cta .btn-primary {
+  background: var(--black);
+  color: var(--white);
 }

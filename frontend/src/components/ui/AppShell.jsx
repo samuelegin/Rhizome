@@ -1,5 +1,6 @@
 import { NavLink, Outlet, Link } from 'react-router-dom'
 import ConnectButton from '../wallet/ConnectButton'
+import logoWhite from '../../assets/brand/rhizome-logo-white.png'
 import '../../app-shell.css'
 
 const PRIMARY_NAV = [
@@ -14,9 +15,8 @@ function AppShell() {
   return (
     <div className="app-shell">
       <aside className="app-sidebar">
-        <Link to="/" className="brand app-brand">
-          <i className="bi bi-diagram-3-fill" />
-          <span>Rhizome</span>
+        <Link to="/" className="brand app-brand" aria-label="Rhizome home">
+          <img src={logoWhite} alt="Rhizome" className="brand-logo" />
         </Link>
         <nav className="app-nav">
           {PRIMARY_NAV.map((item) => (
