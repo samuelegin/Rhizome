@@ -1,835 +1,1304 @@
 # Rhizome
 
-### Communities that form from relationships, not memberships.
+### Communities that form from relationships, not ownership.
 
-**Relationship-derived membership on Monad — verified connections in, enforceable rights out.**
+**Rhizome is a protocol for programmable, relationship-derived membership.**
 
-Rhizome is a protocol for communities whose membership is **derived from live, evidence-backed relationships** rather than explicitly assigned.
+Instead of assigning membership through an allowlist, NFT, token balance, or permanent role, Rhizome lets a community define **which relationships qualify**, **how fresh those relationships must be**, and **how many qualifying connections are required**.
 
-Instead of asking *"Does this wallet own the right token?"* or *"Was this wallet added to the list?"*, Rhizome asks:
+The resulting membership is evaluated onchain and exposed through a simple contract primitive:
 
-> **"Does this wallet have the relationships required to belong here?"**
-
-Evidence from social, collaborative or onchain activity is turned into typed relationship signals, registered as **Verified Connections**, and evaluated by a community's membership rules. Those membership conditions can then control real onchain rights.
-
-```
-Evidence → Relationship Signal → Verified Connection → Freshness → Membership → Rights
+```solidity
+rhizome.isMember(user)
 ```
 
-A **Rhizome** defines what relationship signal qualifies, how long that relationship stays fresh, and how many qualifying connections are required. When relationships go stale, membership lapses on its own, with no admin action, no cron job and no stored flag.
+Any contract can use that result to gate rights such as posting, voting, minting, claiming, or participating.
 
-> **Envio explains. Monad decides.**
-
-> Built for **Monad Metropolis** · Social / Culture track · Monad Testnet (chain ID `10143`) · [Why Monad?](#why-monad)
+> **Relationships become state. Membership becomes policy. Rights become enforceable.**
 
 ---
 
-## Table of Contents
+## The idea
 
-1. [Overview](#overview)
-2. [The Problem](#the-problem)
-3. [The Solution](#the-solution)
-4. [Why Monad](#why-monad)
-5. [How It Works](#how-it-works)
-6. [Repository Structure](#repository-structure)
-7. [Architecture](#architecture)
-8. [Smart Contracts](#smart-contracts)
-9. [Membership Model](#membership-model)
-10. [Freshness Model](#freshness-model)
-11. [Trust Model](#trust-model)
-12. [The Indexer (Envio)](#the-indexer-envio)
-13. [The Registrar Bot](#the-registrar-bot)
-14. [Frontend](#frontend)
-15. [Live Deployment: Monad Testnet](#live-deployment-monad-testnet)
-16. [Getting Started](#getting-started)
-17. [Configuration Reference](#configuration-reference)
-18. [Testing](#testing)
-19. [Integrating Rhizome in Your Contract](#integrating-rhizome-in-your-contract)
-20. [Use Cases](#use-cases)
-21. [Design Decisions & Tradeoffs](#design-decisions--tradeoffs)
-22. [Known Limitations](#known-limitations)
-23. [Status & Roadmap](#status--roadmap)
-24. [Tech Stack](#tech-stack)
-25. [Team](#team)
+Most onchain communities answer:
 
----
+> **“Does this wallet own the required asset?”**
 
-## Overview
+or:
 
-Rhizome turns **evidence of real interaction between two wallets** into **enforceable onchain rights**.
+> **“Is this wallet on the allowlist?”**
 
-- **Rio** (a demo governance and staking environment) produces observable activity.
-- **Envio** indexes that activity and derives relationship signals from it.
-- A **registrar** submits qualifying relationships to a **RelationshipRegistry** on Monad as *Verified Connections*.
-- A **Rhizome** (one community) reads active connections against its anchors and derives `isMember()` on every call.
-- **MemberSpace** shows that membership is a real, enforceable right: a non-member's `post()` call reverts.
+Rhizome asks a different question:
 
-The name comes from the botanical rhizome: a root network with no single center, where any node can sprout a new shoot. Communities grow along relationships rather than being handed down from a list.
+> **“Does this wallet currently have the relationships required to participate?”**
 
-### Core concepts
+That distinction matters because ownership and belonging are not always the same thing.
 
-| Term | Meaning |
-|---|---|
-| **Evidence** | Observable activity between wallets. In the MVP: two wallets voting on the same Rio governance proposal. |
-| **Relationship signal** | A typed kind of qualifying relationship, identified onchain by a `bytes32` `signalType` (MVP: `SHARED_GOVERNANCE`). |
-| **Verified Connection** | The canonical onchain record that a relationship signal has qualified between two addresses. "Verified" is the protocol's name for this canonical registered state; it does not mean the relationship is cryptographically proven (see [Trust Model](#trust-model)). |
-| **Freshness** | How long a connection counts after its last qualifying activity. |
-| **Anchor** | One of up to 3 creator-assigned bootstrap members a Rhizome measures connections against. |
-| **Rhizome** | One community: a signal, a freshness window, a threshold and its anchors. |
-| **Rights** | Anything a contract gates on `isMember()`, such as posting, minting or voting. |
+A token can be bought.
 
-### Evidence sources are pluggable
+An NFT can be transferred.
 
-A Rhizome is defined by *what relationship signal qualifies*, not by where the evidence comes from. The registry and the Rhizome contracts only see a `signalType`. In this MVP the evidence source is Rio governance activity, derived by Envio and registered by a registrar, but social, collaborative or other onchain sources can be added the same way: derive a new signal off-chain, register it, and point a Rhizome at it.
+An allowlist can become stale.
 
-| Traditional community | Rhizome community |
-|---|---|
-| Admin decides who belongs | Verified connections decide who belongs |
-| Static member list | Derived membership |
-| Manual approval | Connection evaluation |
-| Manual removal | Membership becomes inactive on its own |
-| Platform-specific roles | Shared, inspectable onchain state |
-| Membership is **assigned** | Membership is **derived** |
+A role can remain active long after the relationship that justified it has disappeared.
 
----
+Rhizome instead treats membership as a **live predicate over relationships**.
 
-## The Problem
-
-Onchain communities mostly run on allowlists, token balances or NFT holdings. Each has a weakness:
-
-- **Allowlists are admin-controlled and static.** Someone has to add and remove people by hand, and stale members stay forever.
-- **Token and NFT gating measures wealth, not belonging.** It can be bought, borrowed or farmed across many wallets, and says nothing about whether you actually participate.
-- **Membership never decays.** A wallet that joined once and vanished still holds full rights a year later.
-- **Reputation systems are opaque.** Scores and badges are computed off-chain and can't be enforced by other contracts without trusting an oracle.
-- **Evidence is invisible to contracts.** Real shared activity (voting on the same proposals, for example) exists onchain, but nothing turns it into a right that other contracts can check.
-
-## The Solution
-
-Rhizome makes membership a **pure function of fresh relationship evidence**:
-
-1. **Evidence, not judgment.** Every Verified Connection is backed by observable activity (in the MVP, two wallets voting on the same Rio governance proposal) and carries an `evidenceRef` hash, rather than resting on anyone's opinion.
-2. **Pairwise and undirected.** A connection is between two wallets and is identical regardless of which is "A" and which is "B".
-3. **Anchored.** Each Rhizome has up to **3 bootstrap anchors**. Membership comes from active connections *to those anchors*.
-4. **Fresh.** A connection counts only inside the Rhizome's freshness window, measured from the last qualifying activity.
-5. **Derived on read.** There is no stored "is member" flag for normal members. `isMember()` is recomputed every time, so expiry is automatic.
-6. **Enforceable.** Other contracts call `isMember()` directly. No oracle, no off-chain lookup.
-
----
-
-## Why Monad
-
-Rhizome is built on Monad because its core idea, **membership that is recomputed from live relationships on every call**, only works if the chain makes reads cheap, writes plentiful and state fresh. Monad is the first EVM chain where that design is practical rather than a gas problem.
-
-| What Rhizome needs | Why it matters | What Monad gives it |
-|---|---|---|
-| **Cheap, constant on-chain reads and checks** | `isMember()` loops over up to 3 anchors and reads the registry up to 3 times. It is meant to sit inside a modifier on *every* interaction (see `MemberSpace.post()`), not be called once and cached. | Low execution cost and high throughput make a per-call membership check affordable, so there is no need to cache a stored flag that can go stale. |
-| **State that is current within a block** | Freshness is `block.timestamp <= lastQualifiedAt + freshnessPeriod`. A member can lapse at any second, and the next call must see it. | Fast blocks (published target: ~400 ms) mean the chain's clock, and therefore the membership answer, moves in sub-second steps. Expiry is enforced almost as it happens. |
-| **Fast finality for a live UI** | The My Network graph, connection badges and membership checklist should reflect a new Verified Connection right away, not minutes later. | Quick finality (published target: ~800 ms) lets the indexer and frontend show registrations as they land, so the graph feels alive. |
-| **Room for many connections** | One shared `RelationshipRegistry` stores every pair, and the registrar keeps writing as new evidence appears. The graph only becomes useful when it is dense. | High throughput and cheap gas make writing and renewing connections at community scale viable. Different pairs write to different storage slots, so independent registrations rarely conflict under parallel execution. |
-| **Standard EVM tooling** | The contracts are plain Solidity, tested with Foundry, wired to wagmi and WalletConnect, and indexed by Envio. | Full EVM bytecode compatibility means no new language, VM or wallet flow. Everything here is the normal Ethereum toolchain pointed at Monad (chain ID `10143` on testnet). |
-
-### Why this fits the Social / Culture track
-
-The track is about open social graphs, programmable incentives and fast settlement. Rhizome is an open social graph whose edges are evidence-backed and expire on their own, and whose membership gates real on-chain rights (posting, minting, voting). Those rights only feel responsive if the underlying chain settles quickly and cheaply.
-
-### The same design on a slower, costlier chain
-
-- A per-call `isMember()` check becomes an expense, pushing designs toward cached membership flags, which is exactly the stale-state problem Rhizome exists to remove.
-- Slow blocks and finality delay the moment a lapse or a new connection becomes visible, so the graph feels like a nightly report rather than a live network.
-- Keeping connections renewed at scale would mean batching, keepers or off-chain shortcuts, which weakens the trust model.
-
-> **Envio explains. Monad decides.** Envio gives the history and context, and Monad is where the authoritative, enforceable answer lives, at a speed and price that lets it be asked every time.
-
-> The Monad figures above are the network's published targets; see the [Monad documentation](https://docs.monad.xyz) for current numbers.
-
----
-
-## How It Works
-
-### End-to-end flow
-
-```
-  Rio (evidence)              Envio (explains)                Monad (decides)
- ─────────────────      ─────────────────────────      ───────────────────────────────
-
-  Alice votes on #7  ─┐
-                      ├─►  VoteCast events  ─►  RelationshipPair(Alice, Bob)
-  Bob votes on #7    ─┘     indexed             evidenceCount = 1
-                                                      │
-                                                      ▼
-                                            Registrar bot polls the pair,
-                                            sees evidenceCount > onchain count
-                                                      │
-                                                      ▼
-                                       RelationshipRegistry.registerConnection(...)
-                                                      │
-                                                      ▼
-                                       VerifiedConnection (Alice ↔ Bob, SHARED_GOVERNANCE)
-                                                      │
-                                                      ▼
-                                  Rhizome.isMember(Alice)  ──►  true if ≥ N fresh
-                                                                connections to anchors
-                                                      │
-                                                      ▼
-                                      MemberSpace.post(hash)  ──►  allowed / reverts
-```
-
-### Step by step
-
-1. **Activity happens in Rio.** Wallets vote on `RioGovernance` proposals. Each vote emits `VoteCast(voter, proposalId, support, timestamp)`.
-2. **Envio derives pairs.** For every proposal, any two distinct voters form a `RelationshipPair`. Each shared proposal adds one unit of `evidenceCount` and updates `lastQualifiedAt`.
-3. **The registrar submits.** A bot polls Envio. When a pair's `evidenceCount` exceeds what is onchain and meets `MIN_EVIDENCE_COUNT`, it calls `registerConnection` on `RelationshipRegistry`.
-4. **The registry records the connection.** It stores the signal type, evidence count, first and last qualified timestamps and an `evidenceRef` hash. It does **not** score or judge anything.
-5. **A Rhizome derives membership.** `Rhizome.isMember(user)` loops over its anchors and counts those where `registry.isConnectionActive(user, anchor, signalType, freshnessPeriod)` is true.
-6. **Rights are enforced.** `MemberSpace.post()` is `onlyMember`. A wallet that qualifies can post; one whose connections expired cannot.
-
----
-
-## Repository Structure
-
-```
-Rhizome/
-├── contracts/                      Foundry project (Solidity 0.8.26)
-│   ├── src/
-│   │   ├── rhizome/
-│   │   │   ├── RelationshipRegistry.sol   Verified Connections (registrar-gated writes)
-│   │   │   ├── Rhizome.sol                One community: config + anchors + derived isMember()
-│   │   │   ├── RhizomeFactory.sol         Deploys Rhizome instances on a shared registry
-│   │   │   └── MemberSpace.sol            onlyMember-gated post(), proof of enforceability
-│   │   └── rio/
-│   │       ├── RioToken.sol               Demo ERC-20
-│   │       ├── RioGovernance.sol          Proposals + one-vote-per-address (evidence source)
-│   │       └── RioStaking.sol             Stake / unstake (second activity source)
-│   ├── script/
-│   │   ├── Deploy.s.sol                   Deploys the full stack in dependency order
-│   │   └── SeedDemo.s.sol                 Creates the "Monad Builders" demo Rhizome
-│   ├── test/                              7 suites + TestBase
-│   ├── broadcast/                         Deployment record for chain 10143
-│   ├── lib/                               forge-std, openzeppelin-contracts
-│   └── foundry.toml
-│
-├── indexer/                        Envio HyperIndex + registrar bot
-│   ├── config.yaml                        Contracts, events, chain
-│   ├── schema.graphql                     Entity model
-│   ├── src/handlers/                      One handler file per indexed contract
-│   └── registrar/
-│       └── submit.js                      Off-chain registrar (viem)
-│
-└── frontend/                       Vite + React app
-    └── src/
-        ├── pages/Landing.jsx              Marketing landing page
-        ├── app/                           Overview · Network · Rhizomes · Explore · Create · Demo
-        ├── components/                    Graph, membership, connection, wallet and UI components
-        └── lib/                           contracts (ABIs, addresses), envio client, wallet, formatters
+```text
+Relationship evidence
+        ↓
+Relationship signal
+        ↓
+Registered connection
+        ↓
+Membership policy
+        ↓
+isMember(user)
+        ↓
+Contract-enforced rights
 ```
 
 ---
 
-## Architecture
+# Why Rhizome?
 
-```
-RIO: evidence source                  RHIZOME: protocol
-───────────────────────────           ───────────────────────────────────────
-RioToken.sol       (ERC-20)           RelationshipRegistry.sol   ◄── Verified Connections
-RioGovernance.sol  (proposals/votes)  Rhizome.sol                ◄── derived membership
-RioStaking.sol     (stake/unstake)    RhizomeFactory.sol         ◄── deploys Rhizomes
-                                      MemberSpace.sol            ◄── onlyMember right
-```
+### Existing membership systems
 
-**One registry, many Rhizomes.** Connections live in a single shared `RelationshipRegistry`, keyed by `(sorted pair, signalType)`. Each `Rhizome` is a separate contract that interprets those shared connections through its own anchors, signal, freshness window and threshold. Two communities can therefore disagree about who belongs while reading the same underlying evidence.
+| Model            | Membership comes from             |
+| ---------------- | --------------------------------- |
+| Allowlist        | Admin assignment                  |
+| NFT / token gate | Ownership                         |
+| Reputation       | Individual score                  |
+| Social graph     | Relationship data                 |
+| **Rhizome**      | **Configured live relationships** |
+
+Rhizome is not another reputation score.
+
+**Reputation describes an individual. Rhizome evaluates relationships between participants.**
+
+A wallet does not qualify because it has “80 reputation.”
+
+It qualifies because it has the relationships that a particular community requires.
 
 ---
 
-## Smart Contracts
+# The core primitive
 
-### `RelationshipRegistry`
+Rhizome separates two things that are normally coupled:
 
-The onchain source of truth for Verified Connections. It stores evidence of a signal having qualified between two addresses and **nothing else**: no trust scores, no reputation, no ranking.
+### 1. Relationship state
+
+The `RelationshipRegistry` records qualifying relationship signals between wallets.
+
+It answers:
+
+> **What qualifying relationships exist?**
+
+### 2. Membership policy
+
+A `Rhizome` defines how those relationships become membership.
+
+It answers:
+
+> **Given this community's rules, does this wallet qualify?**
+
+### 3. Rights
+
+Other contracts consume the membership result.
+
+They answer:
+
+> **What can this member do?**
+
+```text
+                 RELATIONSHIP STATE
+                         │
+                         ▼
+              RelationshipRegistry
+                         │
+          ┌──────────────┼──────────────┐
+          │              │              │
+          ▼              ▼              ▼
+      Rhizome A       Rhizome B      Rhizome C
+      1 connection    2 connections  3 connections
+      7 days          30 days        90 days
+          │              │              │
+          ▼              ▼              ▼
+      isMember()      isMember()     isMember()
+          │              │              │
+          ▼              ▼              ▼
+        Rights         Rights         Rights
+```
+
+The same relationship can therefore be interpreted differently by different communities.
+
+---
+
+# What makes Rhizome different?
+
+## 1. Membership is derived, not assigned
+
+A traditional system might store:
+
+```solidity
+members[user] = true;
+```
+
+Rhizome does not need a permanent membership flag.
+
+Instead:
+
+```text
+isMember(user)
+      ↓
+inspect qualifying relationships
+      ↓
+check freshness
+      ↓
+count active connections
+      ↓
+return true / false
+```
+
+Membership is therefore a **live property of the user's current relationship state**.
+
+---
+
+## 2. Relationships can expire naturally
+
+Rhizome introduces **freshness**.
+
+A qualifying relationship only counts for a configured period after its most recent qualifying activity.
+
+Conceptually:
+
+```text
+active =
+    block.timestamp <=
+    lastQualifiedAt + freshnessPeriod
+```
+
+No cron job needs to remove the member.
+
+No admin needs to manually revoke access.
+
+If the relationship stops being fresh, the membership predicate simply becomes false.
+
+```text
+Relationship active
+       ↓
+     Member
+       ↓
+Activity stops
+       ↓
+Freshness expires
+       ↓
+Not a member
+```
+
+This makes membership **dynamic instead of permanent**.
+
+---
+
+## 3. Communities define their own meaning of belonging
+
+Rhizome does not claim that one activity objectively proves that someone belongs.
+
+Instead, a community chooses the relationship signal that matters to it.
+
+A community can define:
+
+* which signal type counts
+* which anchors establish its initial social boundary
+* how many qualifying connections are required
+* how fresh those connections must be
+
+The protocol then evaluates that rule consistently.
+
+In the current MVP, the implemented signal is:
+
+```text
+SHARED_GOVERNANCE
+```
+
+meaning two wallets participated in the same Rio governance proposal.
+
+Future relationship signals can represent other forms of interaction such as:
+
+```text
+SHARED_PAYMENT
+SHARED_EVENT
+SHARED_CONTRIBUTION
+SHARED_PROJECT
+SHARED_COMMUNITY
+SHARED_TRADE
+```
+
+The underlying evidence source can change without changing the membership primitive.
+
+---
+
+# The membership model
+
+A Rhizome contains four core pieces of policy:
+
+### Signal type
+
+Which relationship signal qualifies?
+
+Example:
+
+```text
+SHARED_GOVERNANCE
+```
+
+### Freshness period
+
+How recently must the relationship have been active?
+
+Example:
+
+```text
+30 days
+```
+
+### Minimum connections
+
+How many qualifying relationships are required?
+
+Example:
+
+```text
+2
+```
+
+### Anchors
+
+Which wallets form the community's initial relationship boundary?
+
+A Rhizome currently supports up to **3 anchors**.
+
+The resulting membership rule is:
+
+```text
+user is an anchor
+OR
+
+number of active qualifying connections
+to the Rhizome's anchors
+>= minimumConnections
+```
+
+For example:
+
+```text
+Monad Builders
+
+Freshness: 30 days
+Minimum connections: 2
+Anchors: Alice, Bob
+```
+
+If Carol has active qualifying relationships with both Alice and Bob:
+
+```text
+Carol → Alice  ✓
+Carol → Bob    ✓
+
+2 active connections
+
+Carol = MEMBER
+```
+
+If Dave only has one:
+
+```text
+Dave → Alice   ✓
+Dave → Bob     ✗
+
+1 active connection
+
+Dave = NOT MEMBER
+```
+
+If Carol's relationships become stale:
+
+```text
+Carol → Alice  expired
+Carol → Bob    expired
+
+0 active connections
+
+Carol = NOT MEMBER
+```
+
+No removal transaction is necessary.
+
+---
+
+# Why anchors?
+
+Anchors establish the initial boundary of a Rhizome without requiring recursive graph traversal.
+
+Rather than traversing:
+
+```text
+Alice → Bob → Carol → Dave → Eve
+```
+
+Rhizome currently evaluates direct connections to a bounded set of anchors:
+
+```text
+             Anchor A
+                │
+                │
+User ───────────┤
+                │
+                │
+             Anchor B
+```
+
+This keeps membership evaluation predictable and bounded.
+
+The current MVP limits each Rhizome to **three anchors** and uses one-hop relationships.
+
+This is an intentional protocol tradeoff, not a claim that real communities only have three social roots.
+
+Future versions can explore richer policies such as:
+
+* multi-hop relationships
+* weighted connections
+* larger anchor sets
+* threshold structures
+* different relationship types
+
+---
+
+# Relationship state vs membership policy
+
+This separation is central to Rhizome.
+
+The `RelationshipRegistry` does not decide whether someone belongs to a community.
+
+It stores relationship signals.
+
+A Rhizome interprets those signals.
+
+For example:
+
+```text
+Alice ↔ Bob
+```
+
+could exist in the shared registry.
+
+Community A might require:
+
+```text
+1 active connection
+7-day freshness
+```
+
+while Community B might require:
+
+```text
+2 active connections
+30-day freshness
+```
+
+The relationship is shared.
+
+The membership policy is not.
+
+This allows a common relationship layer to support many different communities.
+
+---
+
+# Evidence is not the same as truth
+
+Rhizome intentionally separates **evidence**, **relationship signals**, and **membership**.
+
+For the MVP:
+
+```text
+Rio governance activity
+        ↓
+observable evidence
+        ↓
+SHARED_GOVERNANCE signal
+        ↓
+registered connection
+        ↓
+Rhizome membership
+```
+
+Voting on the same proposal does not objectively prove friendship, trust, or belonging.
+
+It is simply the relationship signal chosen for the MVP.
+
+This distinction allows Rhizome to remain **signal-agnostic**.
+
+Different applications can define different ways of deriving meaningful relationship signals.
+
+---
+
+# Trust model
+
+The current implementation does **not** claim trustless relationship verification.
+
+The trust boundary is explicit:
+
+```text
+Rio
+ ↓
+raw observable activity
+
+Envio
+ ↓
+derives relationship signals
+
+Registrar
+ ↓
+submits qualifying relationship claims
+
+Monad
+ ↓
+stores the registered relationship
+
+Rhizome
+ ↓
+deterministically evaluates membership
+
+Consumer contract
+ ↓
+enforces rights
+```
+
+The registrar is therefore a trusted component in the current MVP.
+
+A malicious registrar could submit an incorrect relationship.
+
+However, once a relationship is registered:
+
+* the relationship state is onchain
+* the membership calculation is deterministic
+* freshness is evaluated onchain
+* membership rules cannot be silently changed
+* consuming contracts do not need an offchain membership lookup
+
+Future versions can reduce this trust assumption through:
+
+* decentralized registrars
+* multiparty verification
+* event-driven registration
+* dispute mechanisms
+* stronger verification paths
+
+### Important terminology
+
+“Verified” in Rhizome means that a relationship signal has been accepted and registered by the configured verification authority.
+
+It does **not** mean that the relationship has been cryptographically proven.
+
+---
+
+# The MVP: Rio governance
+
+The current MVP uses a small governance environment called **Rio** to produce relationship evidence.
+
+Rio allows wallets to participate in governance proposals.
+
+When multiple wallets vote on the same proposal, the Envio indexer derives a:
+
+```text
+SHARED_GOVERNANCE
+```
+
+relationship signal between them.
+
+For example:
+
+```text
+Proposal #42
+
+Alice ── voted
+Bob   ── voted
+Carol ── voted
+```
+
+The indexer can derive:
+
+```text
+Alice ↔ Bob
+Alice ↔ Carol
+Bob   ↔ Carol
+```
+
+The registrar can then register qualifying connections in the shared `RelationshipRegistry`.
+
+Rhizome does not need to understand how Rio produced the evidence.
+
+It only consumes the resulting relationship signal.
+
+---
+
+# Architecture
+
+```text
+                         ┌─────────────────┐
+                         │      Rio        │
+                         │   Governance    │
+                         └────────┬────────┘
+                                  │
+                              VoteCast
+                                  │
+                                  ▼
+                         ┌─────────────────┐
+                         │     Envio       │
+                         │  Relationship   │
+                         │    Indexer      │
+                         └────────┬────────┘
+                                  │
+                         relationship signal
+                                  │
+                                  ▼
+                         ┌─────────────────┐
+                         │    Registrar    │
+                         │                 │
+                         └────────┬────────┘
+                                  │
+                         registerConnection()
+                                  │
+                                  ▼
+                  ┌─────────────────────────────┐
+                  │  RelationshipRegistry      │
+                  │                             │
+                  │  shared relationship state │
+                  └─────────────┬───────────────┘
+                                │
+                  ┌─────────────┼─────────────┐
+                  │             │             │
+                  ▼             ▼             ▼
+             Rhizome A      Rhizome B      Rhizome C
+                  │             │             │
+                  └─────────────┼─────────────┘
+                                │
+                           isMember()
+                                │
+                                ▼
+                       ┌─────────────────┐
+                       │ Consumer Apps   │
+                       │ / Contracts     │
+                       └─────────────────┘
+```
+
+---
+
+# RelationshipRegistry
+
+`RelationshipRegistry` is the shared onchain store for relationship signals.
+
+It stores:
 
 ```solidity
 struct Connection {
     bytes32 signalType;
-    uint32  evidenceCount;
-    uint64  firstQualifiedAt;
-    uint64  lastQualifiedAt;
+    uint256 evidenceCount;
+    uint256 firstQualifiedAt;
+    uint256 lastQualifiedAt;
     bytes32 evidenceRef;
-    bool    exists;
+    bool exists;
 }
 ```
 
-| Function | Access | Description |
-|---|---|---|
-| `registerConnection(userA, userB, signalType, evidenceCount, firstQualifiedAt, lastQualifiedAt, evidenceRef)` | `onlyRegistrar` | Creates or renews a connection |
-| `setRegistrar(newRegistrar)` | `onlyOwner` | Rotates the registrar address |
-| `connectionId(userA, userB, signalType)` | public pure | `keccak256(abi.encodePacked(min, max, signalType))` |
-| `getConnection(userA, userB, signalType)` | view | Returns the stored `Connection` |
-| `isConnectionActive(userA, userB, signalType, freshnessPeriod)` | view | `block.timestamp <= lastQualifiedAt + freshnessPeriod` |
-| `getNeighbors(user)` | view | All addresses the user has ever been connected to |
+Connections are identified by:
 
-**Behavior worth knowing**
+```text
+wallet A
+wallet B
+signal type
+```
 
-- **Address normalization.** The pair is sorted before hashing, so `(Alice, Bob)` and `(Bob, Alice)` resolve to the same connection.
-- **Renewal.** Re-registering an existing pair updates `evidenceCount`, `lastQualifiedAt` and `evidenceRef`. `firstQualifiedAt` only ever moves *earlier*.
-- **No duplicate neighbors.** The neighbor list is appended to only when a connection is first created.
-- **Signal separation.** Different `signalType` values never collide, even for the same pair.
-- **Validation.** Reverts on zero addresses (`ZeroAddress`), self-connections (`SelfConnection`) and `firstQualifiedAt > lastQualifiedAt` (`InvalidTimestamps`).
-- **Events.** `ConnectionRegistered` carries the full record so indexers never need to read storage; `RegistrarUpdated` tracks rotation.
+Wallet pairs are normalized so that:
 
-### `Rhizome`
+```text
+Alice ↔ Bob
+```
 
-One community. Configuration is **immutable** (`registry`, `signalType`, `freshnessPeriod`, `minimumConnections`); only the anchor set and the creator can change.
+and:
 
-| Constant / field | Meaning |
-|---|---|
-| `MAX_BOOTSTRAP_MEMBERS = 3` | Hard cap on anchors |
-| `signalType` | The relationship kind this community reads (MVP: `SHARED_GOVERNANCE`) |
-| `freshnessPeriod` | Seconds a connection stays active after its last qualifying activity |
-| `minimumConnections` | Number of active anchor connections needed (`1 … 3`) |
-| `creator` | Bootstrap admin (the factory caller) |
+```text
+Bob ↔ Alice
+```
 
-| Function | Access | Description |
-|---|---|---|
-| `addBootstrapMember(member)` | creator | Adds an anchor (max 3, no duplicates, no zero address) |
-| `removeBootstrapMember(member)` | creator | Removes an anchor; swap-and-pop keeps the array compact and frees the slot |
-| `transferCreator(newCreator)` | creator | Hands over admin rights |
-| `isMember(user)` | view | The derived membership check |
-| `getBootstrapMembers()` | view | Current anchors |
-| `getConfig()` | view | Registry, name, signal, freshness, threshold, creator |
+refer to the same relationship.
 
-The constructor reverts with `InvalidConfig` if `minimumConnections` is `0` or greater than 3, or if `freshnessPeriod` is `0`.
+The registry is responsible for storing relationship state.
 
-### `RhizomeFactory`
+It does not determine community membership.
 
-Deploys `Rhizome` instances against one shared registry. The caller of `createRhizome(name, signalType, freshnessPeriod, minimumConnections)` automatically becomes the Rhizome's creator. The factory tracks every instance (`getAllRhizomes()`, `allRhizomesLength()`), stores each config, and emits `RhizomeCreated` so indexers can discover new communities with no manual address entry.
+---
 
-### `MemberSpace`
+# Rhizome
 
-A deliberately trivial contract that exists to prove one point: **membership is an enforceable right, not an analytics label.**
+A `Rhizome` is a membership policy built on top of the shared registry.
+
+Its configuration includes:
+
+```text
+registry
+signalType
+freshnessPeriod
+minimumConnections
+anchors
+```
+
+The configuration is immutable after deployment.
+
+This means the rules defining a particular Rhizome cannot silently change after users begin participating.
+
+A new policy can instead be deployed as another Rhizome.
+
+---
+
+# `isMember()`
+
+The core interface is intentionally small:
 
 ```solidity
-function post(bytes32 contentHash) external onlyMember {
-    emit PostCreated(msg.sender, contentHash, block.timestamp);
+function isMember(address user) external view returns (bool);
+```
+
+A consuming contract can simply do:
+
+```solidity
+modifier onlyMember() {
+    require(rhizome.isMember(msg.sender), "Not a member");
+    _;
 }
 ```
 
-`onlyMember` calls `rhizome.isMember(msg.sender)` and reverts with `"Not a Rhizome member"` otherwise. A test covers a former member losing access after their connections expire.
+This means the same membership primitive can be used to gate:
 
-### Rio contracts (evidence environment)
+```text
+posting
+voting
+minting
+claims
+payouts
+events
+governance
+permissions
+```
 
-| Contract | Role |
-|---|---|
-| `RioToken` | Plain OpenZeppelin ERC-20 (`RIO`) with owner-gated `mint`, used only as demo fuel. **Rhizome membership never depends on holding it.** |
-| `RioGovernance` | Anyone can create a proposal (`title`, `description`, time window). Each address can vote once per proposal (`Against / For / Abstain`). Emits `VoteCast`, the evidence source. Intentionally **not** token-weighted and has no quorum or execution: the voting *activity* is the point, not the outcome. |
-| `RioStaking` | Stake/unstake with `SafeERC20` and `ReentrancyGuard`; no yield. A second observable activity source, **not** used by the MVP signal. |
+Rhizome does not need to know what the right is.
+
+It only determines whether the caller satisfies the community's membership rule.
 
 ---
 
-## Membership Model
+# MemberSpace
 
+`MemberSpace` is a minimal demonstration of contract-level enforcement.
+
+Its `post()` function is restricted to Rhizome members.
+
+```text
+Wallet
+  ↓
+isMember()
+  ↓
+true → post succeeds
+false → transaction reverts
 ```
-isMember(user) =
-      user is a bootstrap anchor
-   OR  count of anchors a  where  isConnectionActive(user, a, signalType, freshnessPeriod)
-       ≥ minimumConnections
-```
 
-### Non-recursive by design
+MemberSpace is not intended to be the product itself.
 
-The anchor set is **creator-assigned (max 3) and never derived** from `isMember()`. Because of that, membership can never depend on itself: there is no path to *"A qualifies because B qualifies, and B qualifies because A qualifies."* The proof-by-test is `test_CircularMembershipPrevention` in `test/Rhizome.t.sol`.
-
-**Tradeoff (explicit and documented):** only wallets directly connected to anchors can qualify. The graph does not grow transitively past one hop in this MVP. This was chosen as the smallest coherent model that is provably free of circular qualification. See [Status & Roadmap](#status--roadmap) for how it could extend.
-
-### Cost
-
-`isMember()` loops over at most 3 anchors and makes at most 3 registry reads, so the check is cheap enough to run on every interaction (for example inside a modifier).
-
-### Worked example: "Monad Builders"
-
-The seeded demo uses `SHARED_GOVERNANCE`, a 30-day freshness window and `minimumConnections = 2`, with two anchors (`A1`, `A2`).
-
-| Wallet | Connections | `isMember` |
-|---|---|---|
-| `A1`, `A2` | anchors | ✅ always |
-| Alice | active with `A1` and `A2` | ✅ |
-| Bob | active with `A1` only | ❌ (needs 2) |
-| Carol | active with `A1`, last qualifying vote 31 days ago | ❌ (stale) |
-| Alice, 31 days after her last shared vote | connections expired | ❌ lapses automatically |
+It demonstrates that a relationship-derived membership decision can become a real smart-contract permission.
 
 ---
 
-## Freshness Model
+# Envio
 
-There is **no decay job, no cron, and no stored ACTIVE/STALE flag.**
+Envio provides the indexing and relationship-derivation layer for the MVP.
 
+It indexes:
+
+* Rio governance events
+* Rio staking
+* RelationshipRegistry events
+* RhizomeFactory events
+* Rhizome instances
+
+For the `SHARED_GOVERNANCE` signal, each new governance vote can be paired with previous voters on the same proposal.
+
+The resulting relationship is provisional until the registrar registers it onchain.
+
+This creates a clear distinction:
+
+```text
+Envio RelationshipPair
+        ↓
+provisional / explanatory state
+
+RelationshipRegistry
+        ↓
+authoritative onchain state
 ```
-isConnectionActive  ≡  block.timestamp ≤ lastQualifiedAt + freshnessPeriod
-```
-
-Freshness is a pure derivation from a timestamp, recomputed on every read. This has three consequences:
-
-- **No maintenance.** Nobody has to call anything for a membership to expire.
-- **No inconsistency.** There is no window where a flag says "active" but the timestamp says otherwise.
-- **Renewal is just new evidence.** When the registrar submits updated evidence, `lastQualifiedAt` moves forward and the connection is active again.
 
 ---
 
-## Trust Model
+# Registrar
 
-Rhizome draws a deliberate line between **explaining** and **deciding**:
+The registrar connects indexed relationship evidence to the onchain registry.
 
-```
-Envio explains.  Monad decides.
-```
+The current registrar:
 
-| Layer | Role | Authority |
-|---|---|---|
-| **Rio** | Produces raw activity | Evidence source only |
-| **Envio** `RelationshipPair` | Off-chain, derived, explanatory graph | **Provisional**, never enforceable |
-| **Registrar** | Submits derived relationships onchain | The explicit trust boundary |
-| **Monad** `VerifiedConnection` | Stored in `RelationshipRegistry` | **Authoritative** and enforceable |
+1. queries relationship pairs from Envio
+2. checks whether the indexed evidence meets the configured threshold
+3. compares the relationship against registered onchain state
+4. submits new or updated connections
+5. records an `evidenceRef`
 
-**What the registrar can and cannot do**
+The current implementation uses a polling model.
 
-- It *can* write or renew connections (and therefore influence who qualifies).
-- It *cannot* change a Rhizome's rules, anchors or freshness window, and it cannot write anything except connection evidence.
-- The registrar address is rotatable by the registry `owner` via `setRegistrar`.
-- By default the deployer is both owner and registrar (see `Deploy.s.sol`).
-
-**What "Verified" means here.** A Verified Connection is the canonical onchain record that a relationship signal has qualified between two addresses. It is verified in the sense that it is registered, stored and enforceable by the protocol. It is **not** independently proven by cryptography or a zero-knowledge proof: the registrar is trusted to derive and submit it faithfully.
-
-This is a **documented MVP boundary, not an oversight.** Every membership decision can be audited back to a stored connection with an `evidenceRef` hash that is reproducible from the indexed evidence (see [The Registrar Bot](#the-registrar-bot)).
+Future versions can move toward event-driven registration or decentralized verification.
 
 ---
 
-## The Indexer (Envio)
+# Evidence references
 
-Located in `indexer/`. Built on **Envio HyperIndex**, indexing Monad Testnet.
+Registered connections contain an `evidenceRef`.
 
-### What it indexes
+For the MVP, the registrar derives this reference from the relevant shared proposal IDs.
 
-| Contract | Events | Result |
-|---|---|---|
-| `RioGovernance` | `ProposalCreated`, `VoteCast` | `Proposal`, `Vote`, `ProposalVoters`, and the derived `RelationshipPair` / `SharedProposal` |
-| `RioStaking` | `Staked`, `Unstaked` | Raw evidence (`StakePosition`, `StakeEvent`); not a signal source yet |
-| `RelationshipRegistry` | `ConnectionRegistered`, `RegistrarUpdated` | `VerifiedConnection` (the enforced onchain state) |
-| `RhizomeFactory` | `RhizomeCreated` | `Rhizome` entity plus **dynamic registration** of the new instance |
-| `Rhizome` *(dynamic)* | `BootstrapMemberAdded`, `BootstrapMemberRemoved`, `CreatorTransferred` | `BootstrapMember` records |
+This allows a registered relationship to be traced back to the evidence that the registrar used when submitting it.
 
-### Entity model (`schema.graphql`)
+The reference is an audit trail.
 
-| Entity | Purpose |
-|---|---|
-| `Proposal`, `Vote`, `ProposalVoters` | Mirror of Rio governance activity |
-| `RelationshipPair` | **Provisional**: wallet pair with `evidenceCount`, `firstQualifiedAt`, `lastQualifiedAt`, linked to its `VerifiedConnection` once registered |
-| `SharedProposal` | The actual proposals both wallets voted on, so the UI can show real titles ("why does Alice qualify?") |
-| `VerifiedConnection` | **Authoritative**: mirrors `ConnectionRegistered` |
-| `Rhizome`, `BootstrapMember` | Communities and their anchors (with `active` flag and `addedAt`) |
-| `StakePosition`, `StakeEvent` | Staking activity |
-
-### How `SHARED_GOVERNANCE` is derived
-
-On each `VoteCast`, the handler records the `Vote`, then pairs the new voter with every earlier voter on the same proposal. For each new pair-and-proposal combination it writes a `SharedProposal` and either creates the `RelationshipPair` (`evidenceCount = 1`) or increments it and moves `lastQualifiedAt` forward. Pair IDs use the lowercase, sorted address order.
-
-### Design notes
-
-- **Address normalization mirrors the contract.** `RelationshipPair.id` is `${lowerAddress}-${higherAddress}`, the same ordering the registry uses, so both views line up for the same two wallets regardless of who voted first.
-- **A gap between `RelationshipPair` and `VerifiedConnection` is expected.** A pair can exist (evidence seen) without a matching connection (not yet registered, or the registrar is down). That gap is the trust model working as intended, not a bug.
-- **Rhizome instances are discovered automatically** through `indexer.contractRegister` off the factory's `RhizomeCreated` event. No manual address lists.
-- **Staking is indexed for completeness**, but the only MVP signal is `SHARED_GOVERNANCE`.
+It is not itself a cryptographic proof that the underlying social interpretation is correct.
 
 ---
 
-## The Registrar Bot
+# Why onchain?
 
-`indexer/registrar/submit.js` (Node + viem) is the off-chain registrar.
+A backend can calculate:
 
-**Loop (every `POLL_INTERVAL_MS`):**
-
-1. Query Envio for `RelationshipPair` rows with `evidenceCount >= MIN_EVIDENCE_COUNT`.
-2. For each, compare `pair.evidenceCount` with the pair's mirrored `VerifiedConnection.evidenceCount` (or `0` if none).
-3. If the indexed count is higher, call `registerConnection(userA, userB, SHARED_GOVERNANCE, evidenceCount, firstQualifiedAt, lastQualifiedAt, evidenceRef)`.
-
-**Reproducible evidence reference.**
-
-```js
-evidenceRef = keccak256( sorted(sharedProposalIds).join(",") )
+```text
+user → member
 ```
 
-Because it is a hash of the sorted proposal IDs behind the connection, anyone can recompute it from the same evidence set. It is not an opaque or random value.
+But the application must then trust the backend's answer.
 
-**Configurable threshold.** `MIN_EVIDENCE_COUNT` (default `1`) sets how many shared proposals are required before a pair is submitted. It is an environment setting, not a hardcoded rule.
+Rhizome moves the membership predicate into a contract:
 
-> The wallet in `PRIVATE_KEY` **must** be the current `RelationshipRegistry.registrar`.
+```text
+relationship state
+       ↓
+onchain membership policy
+       ↓
+isMember(user)
+       ↓
+contract enforcement
+```
+
+The important property is **composability**.
+
+A community's membership rule can be consumed by another smart contract without that contract depending on a private database or offchain membership API.
 
 ---
 
-## Frontend
+# Why Monad?
 
-Located in `frontend/`. **React 18 + Vite**, **wagmi v2 + viem + RainbowKit** for wallets, **TanStack Query** for data, **React Router v7**.
+Rhizome intentionally favors **live membership evaluation** instead of maintaining cached membership flags.
 
-### Routes
+A membership check may need to inspect the user's qualifying relationships and determine whether they are still fresh.
 
-| Route | Page | Purpose |
-|---|---|---|
-| `/` | Landing | Product story: hero, protocol journey, lifecycle, use cases, developer integration |
-| `/app` | Overview | The connected wallet's membership qualification and checklist |
-| `/app/network` | Network | Graph of the wallet's connections (and second hop) with status badges |
-| `/app/rhizomes` | My Rhizomes | Communities the wallet belongs to or created |
-| `/app/rhizomes/:address` | Rhizome detail | Config, anchors, qualification, "why am I a member" |
-| `/app/explore` | Explore | Browse all Rhizomes |
-| `/app/create` | Create | Calls `RhizomeFactory.createRhizome` and then adds up to three anchors |
-| `/app/demo` | Demo | Placeholder for the guided "Alice votes with Bob" walkthrough |
+The MVP keeps that evaluation bounded:
 
-### Notable components
+* maximum 3 anchors
+* direct one-hop relationships
+* bounded registry reads
+* no recursive graph traversal
 
-- `NetworkGraph`, `ConnectionsList`: relationship visualization
-- `ConnectionBadge`, `ConnectionDetailPanel`: active/stale status and evidence
-- `QualificationChecklist`, `WhyAmIAMember`: explain *why* a wallet qualifies or doesn't
-- `RhizomeSummaryCard`: community summary
-- `ConnectButton`, `RequireWallet`: wallet gating
-- `DemoModeBanner`: shown when no indexer is configured
+Monad's execution characteristics make this architecture more practical for applications that need frequent interaction and fresh state.
 
-### Demo mode
+The goal is not to claim that Rhizome is impossible elsewhere.
 
-If `VITE_ENVIO_ENDPOINT` is **unset**, the app runs in **demo mode** against bundled mock data (`lib/envio/mockData.js`), so the UI is fully explorable without a running indexer. Setting the variable switches every query to the live Envio GraphQL API, using the same function names and return shapes.
+The goal is to avoid replacing live relationship evaluation with stale cached membership merely because execution becomes too expensive.
 
 ---
 
-## Live Deployment: Monad Testnet
+# Social/Culture
 
-**Network:** Monad Testnet · **Chain ID:** `10143` · **RPC:** `https://testnet-rpc.monad.xyz`
+Rhizome is designed around a simple idea:
 
-| Contract | Address |
-|---|---|
-| `RioToken` | `0x5a9Cb816b188307b6F27C5CA71491BeB96bd48EC` |
-| `RioStaking` | `0x3A4ab9f0Ba9f9DAA34d2DF0e7D70a72C54290aED` |
-| `RioGovernance` | `0x48D8896D16a7EA7ef71C5e615b1cDb44501AD610` |
-| `RelationshipRegistry` | `0xf4F6632872b827e85517904E891F149837953469` |
-| `RhizomeFactory` | `0xCafb8e54d7A86a9d37158a5069624Aaac22Eb2BF` |
-| Demo `Rhizome` ("Monad Builders") | `0xcC3B99f58681157eec883D2cA98F5541Deb783D4` |
-| Demo `MemberSpace` | `0xa937Ed425C0EB1079A06A3056a8E05bFc0F6ABaA` |
+> **What if an onchain community could define belonging through relationships rather than ownership?**
 
-The first five come from `contracts/broadcast/Deploy.s.sol/10143/run-latest.json`. The demo Rhizome and MemberSpace addresses are the ones configured in `frontend/src/lib/contracts/addresses.js`.
+This fits social protocols because social participation naturally produces relationships:
 
-The indexer is configured with `start_block: 63102860`.
+```text
+people who collaborate
+people who govern together
+people who attend together
+people who transact together
+people who contribute together
+people who repeatedly interact
+```
 
-> The contracts are **not upgradeable** and have no proxy layer. A redeploy produces new addresses, which must be updated in the places listed under [Redeploying](#redeploying).
+Rhizome turns those relationship signals into programmable membership.
+
+The social graph becomes an input.
+
+The membership policy becomes programmable.
+
+The resulting right becomes enforceable.
 
 ---
 
-## Getting Started
+# Example applications
 
-### Prerequisites
+### Relationship-based governance
 
-- [Foundry](https://getfoundry.sh) (`forge`, `cast`)
-- Node.js 18+
-- pnpm (indexer) and npm (frontend and registrar)
-- A Monad Testnet wallet funded with testnet MON
+Require a wallet to have active relationships with existing governance participants before voting.
 
-### 1. Contracts
+### Community access
 
-```bash
-cd contracts
-# Dependencies are vendored under lib/. If you need to re-fetch them:
-forge install foundry-rs/forge-std OpenZeppelin/openzeppelin-contracts
+Allow posting or participation only while a wallet maintains the relationships required by the community.
 
-forge build
-forge test -vv
-```
+### Contributor communities
 
-`foundry.toml` pins `solc 0.8.26` with the optimizer on at 200 runs.
+Membership can depend on relationships created through shared contributions or projects.
 
-**Deploy the full stack** (dependency order: `RioToken → RioStaking → RioGovernance → RelationshipRegistry → RhizomeFactory`):
+### Cohorts and groups
 
-```bash
-cd contracts
-cp .env.example .env          # set PRIVATE_KEY and MONAD_RPC_URL
+A cohort can define membership through shared participation rather than a permanent role assignment.
 
-source .env
-forge script script/Deploy.s.sol \
-  --rpc-url $MONAD_RPC_URL \
-  --broadcast
-```
+### Events
 
-`Deploy.s.sol` mints a 1,000,000 RIO initial supply to the deployer and sets the **deployer as both registry owner and registrar**.
+Attendance or repeated participation can produce relationship signals that determine access to future events.
 
-**Seed the demo Rhizome** ("Monad Builders", 30-day freshness, 2 minimum connections, 2 anchors):
+### Rewards
 
-```bash
-# in contracts/.env
-# RHIZOME_FACTORY=<factory address from the deploy output>
-# ANCHOR_1=<wallet>
-# ANCHOR_2=<wallet>
+A reward contract can require active membership instead of a static allowlist.
 
-forge script script/SeedDemo.s.sol \
-  --rpc-url $MONAD_RPC_URL \
-  --broadcast
-```
+### Permissioned applications
 
-### 2. Indexer
-
-```bash
-cd indexer
-cp .env.example .env
-pnpm install
-pnpm codegen
-pnpm dev          # local dev console with a link to the Hasura GraphQL playground
-```
-
-`pnpm start` (`envio start`) serves the same API in production.
-
-> The contract addresses and `start_block` the indexer actually uses live in **`indexer/config.yaml`**. Update them after any redeploy. `Rhizome` instances need no address; they are discovered from `RhizomeCreated` events.
-
-### 3. Registrar bot
-
-```bash
-cd indexer/registrar
-cp .env.example .env
-npm install
-npm start
-```
-
-Set `PRIVATE_KEY` to the **current registrar** wallet and `ENVIO_ENDPOINT` to the GraphQL URL from step 2.
-
-### 4. Frontend
-
-```bash
-cd frontend
-cp .env.example .env.local
-npm install
-npm run dev
-```
-
-Set `VITE_ENVIO_ENDPOINT` in `.env.local` to turn demo mode off and use live data. For a production build, run `npm run build` and then `npm run preview`.
-
-### Running the full loop
-
-1. Deploy the contracts and seed a demo Rhizome with two anchors.
-2. Start the indexer and the registrar.
-3. From the anchor wallets and a test wallet, call `RioGovernance.createProposal(...)` and then `vote(proposalId, support)` from each.
-4. Watch the pair appear in Envio, then a `VerifiedConnection` appear after the registrar's next poll.
-5. Call `Rhizome.isMember(testWallet)`, or open the app, to see membership flip to `true`.
-6. Call `MemberSpace.post(hash)` as the test wallet to confirm the right is enforced.
-
-### Redeploying
-
-After a fresh deploy, update:
-
-| File | What to update |
-|---|---|
-| `indexer/config.yaml` | Contract addresses and `start_block` |
-| `indexer/.env`, `indexer/registrar/.env` | `RELATIONSHIP_REGISTRY_ADDRESS` and the other addresses |
-| `frontend/src/lib/contracts/addresses.js` | All contract addresses (including the demo Rhizome and MemberSpace) |
+Any contract can use `isMember()` as a composable access-control primitive.
 
 ---
 
-## Configuration Reference
+# What Rhizome does not solve
 
-| Variable | Where | Purpose |
-|---|---|---|
-| `PRIVATE_KEY` | `contracts/.env`, `indexer/registrar/.env` | Deployer / registrar key. **Never commit.** |
-| `MONAD_RPC_URL` | `contracts/.env`, `indexer/registrar/.env` | Monad RPC (default `https://testnet-rpc.monad.xyz`) |
-| `RHIZOME_FACTORY` | `contracts/.env` | Used by `SeedDemo.s.sol` |
-| `ANCHOR_1`, `ANCHOR_2` | `contracts/.env` | Demo anchor wallets |
-| `RIO_GOVERNANCE_ADDRESS`, `RIO_STAKING_ADDRESS`, `RELATIONSHIP_REGISTRY_ADDRESS`, `RHIZOME_FACTORY_ADDRESS` | `indexer/.env` | Deployed addresses |
-| `ENVIO_ENDPOINT` | `indexer/registrar/.env` | Envio GraphQL URL |
-| `MIN_EVIDENCE_COUNT` | `indexer/registrar/.env` | Shared proposals required before submitting (default `1`) |
-| `POLL_INTERVAL_MS` | `indexer/registrar/.env` | Registrar polling interval (default `60000`) |
-| `VITE_ENVIO_ENDPOINT` | `frontend/.env.local` | Envio GraphQL URL; unset means demo mode |
-| `VITE_WALLETCONNECT_PROJECT_ID` | `frontend/.env.local` | WalletConnect project ID for RainbowKit |
+Rhizome does not claim to solve every problem around identity or social trust.
+
+The current implementation does **not** provide:
+
+* universal Sybil resistance
+* cryptographically proven social relationships
+* decentralized relationship verification
+* multi-hop membership
+* arbitrary graph traversal
+* multiple production relationship signals
+* onchain dispute resolution
+* mainnet deployment
+* audited contracts
+
+The MVP deliberately focuses on one primitive:
+
+> **Turn a configured relationship signal into live, enforceable membership.**
 
 ---
 
-## Testing
+# Current limitations
 
-The Foundry suite lives in `contracts/test/` across **7 suites** plus a shared `TestBase.sol`:
+## Registrar trust
 
-| Suite | Covers |
-|---|---|
-| `RelationshipRegistry.t.sol` | Registration, registrar gating and rotation, **address normalization and reversed-order equivalence**, renewal (`firstQualifiedAt` preserved), evidence count and ref updates, duplicate-neighbor prevention, self/zero/invalid-timestamp reverts, freshness active/expired/nonexistent, signal-type isolation |
-| `Rhizome.t.sol` | Config validation, creator assignment, anchor add/remove/limit (max 3), **qualification via two active anchor connections**, insufficient and stale connections, membership change on expiry and on anchor removal, **`test_CircularMembershipPrevention`**, creator transfer |
-| `RhizomeFactory.t.sol` | Deployment and tracking, config forwarding, creator = caller, event completeness, multiple independent instances, invalid-config reverts |
-| `MemberSpace.t.sol` | Member and anchor can post, **non-member cannot**, **former member loses access after expiry**, event emission |
-| `RioGovernance.t.sol` | Proposals, For/Against/Abstain, duplicate-vote prevention, voting window enforcement, shared-proposal evidence generation |
-| `RioStaking.t.sol` | Stake/unstake, zero-amount and insufficient-balance reverts, `isStaking`, events, wrong-token isolation |
-| `RioToken.t.sol` | Supply, metadata, transfers, approvals, owner-only mint |
+The current relationship-registration process relies on a configured registrar.
 
-```bash
-cd contracts
-forge test            # run everything
-forge test -vv        # with logs
-forge test --match-contract RhizomeTest
-forge test --match-test test_CircularMembershipPrevention -vvv
+This is the largest trust assumption in the MVP.
+
+## One-hop membership
+
+Membership currently evaluates direct relationships to a maximum of three anchors.
+
+## Signal generation
+
+The MVP's governance activity is relatively easy to generate and is not intended to be a production-grade Sybil-resistant identity system.
+
+## Single implemented signal
+
+`SHARED_GOVERNANCE` is the current relationship signal.
+
+The architecture is designed to support additional signal types.
+
+## Forward-only evidence
+
+The current relationship model focuses on qualification and freshness rather than a complete onchain revocation/dispute system.
+
+## Polling
+
+The current registrar polls indexed state rather than using a fully event-driven pipeline.
+
+## Testnet
+
+The current deployment is on Monad Testnet and has not undergone a production security audit.
+
+---
+
+# Protocol design tradeoffs
+
+Rhizome intentionally chooses:
+
+### Derived membership over stored membership
+
+**Benefit:** no stale membership flags.
+
+**Tradeoff:** membership requires evaluating relationship state.
+
+### One-hop relationships over recursive traversal
+
+**Benefit:** predictable execution.
+
+**Tradeoff:** less expressive graph policies.
+
+### Immutable Rhizome rules
+
+**Benefit:** predictable community policy.
+
+**Tradeoff:** changing the policy requires a new configuration/Rhizome.
+
+### Shared registry
+
+**Benefit:** relationship state can be reused across communities.
+
+**Tradeoff:** registry design and signal isolation become important protocol concerns.
+
+### Registrar-based verification
+
+**Benefit:** practical MVP implementation.
+
+**Tradeoff:** relationship registration is not fully trustless.
+
+---
+
+# Current deployment
+
+Rhizome is deployed on **Monad Testnet**.
+
+**Chain ID:** `10143`
+
+### Contracts
+
+| Contract             | Address                                      |
+| -------------------- | -------------------------------------------- |
+| RioToken             | `0x5a9Cb816b188307b6F27C5CA71491BeB96bd48EC` |
+| RioStaking           | `0x3A4ab9f0Ba9f9DAA34d2DF0e7D70a72C54290aED` |
+| RioGovernance        | `0x48D8896D16a7EA7ef71C5e615b1cDb44501AD610` |
+| RelationshipRegistry | `0xf4F6632872b827e85517904E891F149837953469` |
+| RhizomeFactory       | `0xCafb8e54d7A86a9d37158a5069624Aaac22Eb2BF` |
+| Demo Rhizome         | `0xcC3B99f58681157eec883D2cA98F5541Deb783D4` |
+| Demo MemberSpace     | `0xa937Ed425C0EB1079A06A3056a8E05bFc0F6ABaA` |
+
+The Envio indexer starts from block:
+
+```text
+63102860
 ```
 
-> The suites define roughly **98 test functions** by direct count of the source. The contracts README quotes 84, so run `forge test` to confirm the current number.
+Contracts are not upgradeable.
 
 ---
 
-## Integrating Rhizome in Your Contract
+# Repository structure
 
-Membership is one view call away. No oracle and no off-chain indexer are needed for enforcement.
+```text
+contracts/
+├── RelationshipRegistry.sol
+├── Rhizome.sol
+├── RhizomeFactory.sol
+├── MemberSpace.sol
+├── RioToken.sol
+├── RioGovernance.sol
+└── RioStaking.sol
+
+indexer/
+├── Envio HyperIndex
+├── relationship derivation
+├── registrar
+└── GraphQL / Hasura
+
+frontend/
+├── landing
+├── overview
+├── network
+├── rhizomes
+├── explore
+├── create
+└── demo
+```
+
+---
+
+# Testing
+
+The protocol includes tests covering:
+
+* connection normalization
+* reversed pair ordering
+* freshness
+* relationship renewal
+* registrar authorization
+* duplicate neighbors
+* signal isolation
+* Rhizome configuration
+* anchor management
+* membership evaluation
+* circular membership prevention
+* MemberSpace enforcement
+* membership expiry
+* Rio governance
+* Rio staking
+* Rio token behavior
+
+The goal of the test suite is to verify the protocol's core invariants rather than simply test frontend behavior.
+
+---
+
+# Integration
+
+Any smart contract can consume a Rhizome.
+
+Example:
 
 ```solidity
-import {Rhizome} from "./Rhizome.sol";
-
-contract MembersOnlyMint {
-    Rhizome public immutable rhizome;
-
-    constructor(address rhizomeAddress) {
-        rhizome = Rhizome(rhizomeAddress);
-    }
+contract CommunityApp {
+    IRhizome public rhizome;
 
     modifier onlyMember() {
-        require(rhizome.isMember(msg.sender), "Not a Rhizome member");
+        require(
+            rhizome.isMember(msg.sender),
+            "Not a member"
+        );
         _;
     }
 
-    function mint() external onlyMember {
-        // gate a mint, a vote, a payout, a post, or any right on live membership
+    function performMemberAction()
+        external
+        onlyMember
+    {
+        // member-only action
     }
 }
 ```
 
-**Reading community configuration**
+The consuming application does not need to understand:
 
-```solidity
-(
-    address registry,
-    string memory name,
-    bytes32 signalType,
-    uint64 freshnessPeriod,
-    uint16 minimumConnections,
-    address creator
-) = rhizome.getConfig();
+* Envio
+* Rio
+* the registrar
+* relationship derivation
+* evidence sources
+
+It only needs the membership interface.
+
+This is what makes Rhizome a protocol primitive rather than a single social application.
+
+---
+
+# Future relationship signals
+
+The MVP uses governance participation.
+
+The broader protocol can support signals derived from:
+
+```text
+Farcaster interactions
+Payments
+Shared communities
+Events / attendance
+Contributions
+Collaborative projects
+Repeated trading
+Onchain coordination
 ```
 
-**Creating a community from a contract or script**
+The important abstraction is that Rhizome does not need to know the original source of the evidence.
 
-```solidity
-address rhizome = factory.createRhizome(
-    "My Community",
-    keccak256("SHARED_GOVERNANCE"),
-    30 days,
-    2
-);
-// msg.sender is the creator; now add up to 3 anchors:
-Rhizome(rhizome).addBootstrapMember(anchor1);
-Rhizome(rhizome).addBootstrapMember(anchor2);
+It consumes a typed relationship signal.
+
+---
+
+# Roadmap
+
+## 1. More relationship signals
+
+Expand beyond governance activity into:
+
+* social interactions
+* payments
+* contributions
+* attendance
+* shared communities
+
+## 2. Richer membership policies
+
+Explore:
+
+* weighted relationships
+* multi-hop relationships
+* larger graph structures
+* multiple signal types
+* more expressive thresholds
+
+## 3. Stronger verification
+
+Reduce registrar trust through:
+
+* multiparty registrars
+* decentralized derivation
+* dispute mechanisms
+* revocation paths
+* event-driven verification
+
+## 4. Production readiness
+
+* security review
+* contract audit
+* stronger indexing infrastructure
+* production relationship sources
+* mainnet deployment
+
+---
+
+# Design philosophy
+
+Rhizome is built around three separations:
+
+### Evidence is not membership.
+
+Observable activity is an input.
+
+### Membership is not ownership.
+
+A wallet can qualify because of relationships rather than assets.
+
+### Membership is not a database flag.
+
+It is a live contract predicate.
+
+Together:
+
+```text
+Evidence
+   ↓
+Relationship
+   ↓
+Membership policy
+   ↓
+Rights
 ```
 
-**Notes for integrators**
+---
 
-- The check is a live read: a wallet that is a member now may not be a member next block if its connections expire.
-- Anchors are always members, and removing an anchor immediately changes derived membership for everyone who relied on it.
-- The deployed interface is per community: call `isMember(address)` on the specific `Rhizome` contract. There is no global `checkMembership(wallet, rhizomeId)`.
+# The protocol in one example
+
+Imagine a community with:
+
+```text
+Signal: SHARED_GOVERNANCE
+Anchors: Alice, Bob
+Freshness: 30 days
+Minimum connections: 2
+```
+
+Carol votes on the same proposals as Alice and Bob.
+
+The system derives:
+
+```text
+Carol ↔ Alice
+Carol ↔ Bob
+```
+
+The registrar registers those connections.
+
+Rhizome evaluates:
+
+```text
+Carol
+ ├── Alice ✓ active
+ └── Bob   ✓ active
+
+2 >= minimumConnections
+
+Carol = MEMBER
+```
+
+A separate contract can then enforce:
+
+```solidity
+require(rhizome.isMember(carol));
+```
+
+Thirty days pass without qualifying activity.
+
+The relationships become stale:
+
+```text
+Carol
+ ├── Alice ✗ expired
+ └── Bob   ✗ expired
+```
+
+Without an admin transaction:
+
+```text
+isMember(Carol) == false
+```
+
+The community's definition of belonging has therefore become a **live, enforceable protocol rule**.
 
 ---
 
-## Use Cases
+# Why this matters
 
-The core pattern: **fresh, evidence-backed relationships to trusted anchors become enforceable rights that expire on their own.** The MVP evidence source is shared governance, but the registry is signal-agnostic (`signalType` is a `bytes32`).
+The interesting part of an onchain social system is not simply putting profiles, posts, or communities on a blockchain.
 
-**Governance and fairness**
-- Relationship-gated DAO voting: only wallets with live, evidence-backed links to core contributors can vote.
-- Airdrops and rewards that favor wallets with recent, evidenced interaction rather than simple holdings.
-- Grant committees and reviewer pools whose members must be connected to known reviewers.
+It is giving social relationships **programmable consequences**.
 
-**Trust and finance**
-- Vouching-based credit, where borrowers need current connections to vouched anchors.
-- Permissioned DeFi pools or marketplaces vetted by network position.
-- Savings circles (ajo / esusu / chama style) admitting members through existing members.
+Rhizome explores a different model of onchain community:
 
-**Access and anti-spam**
-- Posting rights in social apps and group chats gated on relationships to existing members.
-- Event, conference and alumni communities whose access tracks actual participation.
-- Gaming guilds where membership reflects who actually plays.
+```text
+Not:
 
-**Infrastructure**
-- Operator, keeper and oracle sets that need fresh relationship evidence to stay eligible.
-- Mentor and cohort networks where "active" means the relationship is active.
+Ownership → Membership
 
-New signals (payments, commits, co-membership, attendance, repeated trades) can be added by choosing a new `signalType` and teaching the indexer and registrar to derive it.
+Not:
 
----
+Admin → Membership
 
-## Design Decisions & Tradeoffs
+Not:
 
-| Decision | Why | Cost |
-|---|---|---|
-| **Derived membership, no stored flag** | Expiry is automatic and can never be inconsistent | Every check pays for up to 3 registry reads |
-| **Non-recursive, anchor-based qualification** | Provably removes circular qualification | Membership doesn't spread past one hop from the anchors |
-| **Anchors capped at 3** | Bounds gas and keeps `isMember()` O(3) | Small bootstrap set per community |
-| **Immutable Rhizome config** | Rules can't change under members' feet | A rule change means deploying a new Rhizome |
-| **Shared registry, per-Rhizome interpretation** | One evidence base, many community rules | Connections are global to a signal, not scoped per community |
-| **Registrar-gated writes** | Keeps evidence derivation off-chain and cheap | A trust assumption (documented, rotatable) |
-| **Registry stores evidence only** | No scoring, ranking or reputation to dispute | Consumers must define their own thresholds |
-| **Rio is an evidence source, not a gate** | Membership never depends on holding RIO | The demo environment isn't an economic system |
-| **Non-token-weighted governance** | Activity is the evidence, not outcomes or wealth | The signal is cheap to generate (see limitations) |
+Score → Membership
+
+But:
+
+Relationship → Membership → Rights
+```
+
+That is the primitive Rhizome is building.
 
 ---
 
-## Known Limitations
+# Team
 
-Being explicit about what the MVP does **not** do:
-
-- **Registrar trust.** Whoever controls the registrar key can add or renew connections. There is no decentralized, multisig or proof-based submission yet.
-- **One-hop membership.** Only wallets with direct active connections to anchors can qualify.
-- **The current signal is cheap to generate.** `RioGovernance` lets anyone create proposals and vote for free, so wallets can produce `SHARED_GOVERNANCE` evidence at will, including across multiple wallets. The anchor requirement limits who can qualify, but Rhizome does not claim to be an anti-Sybil system. Stronger signals (costly, social or independently verified evidence) are a roadmap item.
-- **Evidence only moves forward.** The registrar submits when indexed `evidenceCount` rises. There is no onchain revocation; connections end only by going stale.
-- **Single signal.** `SHARED_GOVERNANCE` is the only implemented relationship signal. Staking is indexed but unused.
-- **No admin override on connections.** The registry owner can rotate the registrar but cannot delete or edit individual connections.
-- **Testnet only.** No audit has been performed; do not use with real value.
-- **Polling registrar.** The bot polls Envio rather than reacting to updates in real time.
+**Samuel Egin**
+Full-stack blockchain developer
+X: `@0xEtherfren`
 
 ---
 
-## Status & Roadmap
+# License
 
-**Working today**
-- Full contract suite deployed on Monad Testnet, with tests.
-- Envio indexer covering Rio evidence, verified connections, dynamic Rhizome discovery and anchor changes.
-- Registrar bot deriving `SHARED_GOVERNANCE` connections.
-- Frontend with wallet connect, overview, network graph, Rhizome browsing and detail, and Rhizome creation.
-
-**Known rough edges**
-- The **Demo** page is currently a placeholder ("Coming next") for the guided Alice-and-Bob walkthrough.
-- `OverviewPage.jsx` still reads `MOCK_RHIZOME` for its qualification query instead of `CONTRACT_ADDRESSES.DEMO_RHIZOME`.
-- `MemberSpace` isn't indexed (the factory doesn't deploy it, so there is no discovery event).
-- The landing page's developer section shows an illustrative `IRhizome` interface (`checkMembership(wallet, rhizomeId)`) that differs from the deployed per-community `isMember(address)` API.
-- `getConnectionEvidence` takes `(selfAddress, peerAddress)` but has no call sites in `app/` yet.
-
-**Possible next steps**
-- Additional evidence sources and signals alongside `SHARED_GOVERNANCE`: social-graph activity (for example Farcaster), payments, co-membership, attendance. None of these are implemented yet.
-- Multi-hop or weighted qualification, with a cycle-safe design.
-- Decentralized or multi-party registrars, and proof-carrying submissions.
-- An event-driven registrar instead of polling.
-- Onchain revocation and dispute paths.
-- Index `MemberSpace` instances and add a guided live demo.
-- A security audit and mainnet-readiness review.
-
----
-
-## Tech Stack
-
-| Layer | Stack |
-|---|---|
-| Smart contracts | Solidity `0.8.26` · Foundry · OpenZeppelin Contracts (`Ownable`, `ERC20`, `ReentrancyGuard`, `SafeERC20`) |
-| Chain | Monad Testnet (`10143`) |
-| Indexing | Envio HyperIndex `3.12.0` · GraphQL (Hasura) |
-| Registrar | Node.js · viem |
-| Frontend | React 18 · Vite 5 · React Router 7 · wagmi v2 · viem · RainbowKit · TanStack Query |
-
----
-
-## Team
-
-| Name | Role | Links |
-|---|---|---|
-| **Samuel Egin** | Full-stack blockchain developer | [@0xEtherfren on X](https://x.com/0xEtherfren) |
-
----
-
-## License
-
-Released under the [MIT License](./LICENSE).
+MIT License
