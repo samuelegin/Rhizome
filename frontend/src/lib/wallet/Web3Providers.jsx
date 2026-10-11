@@ -4,7 +4,7 @@ import { RainbowKitProvider, darkTheme } from '@rainbow-me/rainbowkit'
 import '@rainbow-me/rainbowkit/styles.css'
 import { wagmiConfig } from './config'
 
-const queryClient = new QueryClient()
+const queryClient = new QueryClient({ defaultOptions: { queries: { refetchInterval: 8000 } } })
 
 const rhizomeTheme = darkTheme({
   accentColor: '#ffffff',

@@ -285,6 +285,7 @@ export async function getUserRhizomes(userAddress) {
     return [
       {
         ...qualification.rhizome,
+        anchors: qualification.anchors,
         isMember: qualification.qualifyingConnections.length >= MOCK_RHIZOME.minimumConnections,
         qualifyingCount: qualification.qualifyingConnections.length,
       },
@@ -301,6 +302,7 @@ export async function getUserRhizomes(userAddress) {
       }
       return {
         ...qualification.rhizome,
+        anchors: qualification.anchors,
         isMember: qualification.qualifyingConnections.length >= Number(r.minimumConnections),
         qualifyingCount: qualification.qualifyingConnections.length,
       }

@@ -2,6 +2,7 @@ import { NavLink, Outlet, Link } from 'react-router-dom'
 import ConnectButton from '../wallet/ConnectButton'
 import logoWhite from '../../assets/brand/rhizome-logo-white.png'
 import '../../app-shell.css'
+import '../../app-design.css'
 
 const PRIMARY_NAV = [
   { to: '/app', label: 'Overview', icon: 'bi-grid-1x2', end: true },
