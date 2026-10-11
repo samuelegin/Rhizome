@@ -4,45 +4,40 @@ import logoWhite from '../../assets/brand/rhizome-logo-white.png'
 import '../../app-shell.css'
 import '../../app-design.css'
 
-const PRIMARY_NAV = [
-  { to: '/app', label: 'Overview', icon: 'bi-grid-1x2', end: true },
-  { to: '/app/network', label: 'My Network', icon: 'bi-diagram-3' },
-  { to: '/app/rhizomes', label: 'Rhizomes', icon: 'bi-hexagon' },
-  { to: '/app/explore', label: 'Explore', icon: 'bi-compass' },
-  { to: '/app/create', label: 'Create Rhizome', icon: 'bi-plus-circle' },
+const NAV = [
+  { to: '/app', label: 'Overview', end: true },
+  { to: '/app/network', label: 'My Network' },
+  { to: '/app/rhizomes', label: 'Rhizomes' },
+  { to: '/app/explore', label: 'Explore' },
+  { to: '/app/create', label: 'Create Rhizome', cta: true },
 ]
 
 function AppShell() {
   return (
-    <div className="app-shell">
-      <aside className="app-sidebar">
-        <Link to="/" className="brand app-brand" aria-label="Rhizome home">
+    <div className="app-shell tn-shell">
+      <header className="tn">
+        <Link to="/" className="tn-brand" aria-label="Rhizome home">
           <img src={logoWhite} alt="Rhizome" className="brand-logo" />
         </Link>
-        <nav className="app-nav">
-          {PRIMARY_NAV.map((item) => (
+        <nav className="tn-links" aria-label="Main">
+          {NAV.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
               end={item.end}
-              className={({ isActive }) => `app-nav-link ${isActive ? 'is-active' : ''}`}
+              className={({ isActive }) => `tn-link ${item.cta ? 'is-cta' : ''} ${isActive ? 'is-active' : ''}`}
             >
-              <i className={`bi ${item.icon}`} />
-              <span>{item.label}</span>
+              {item.label}
             </NavLink>
           ))}
         </nav>
-      </aside>
-
-      <div className="app-main">
-        <header className="app-topbar">
-          <div className="app-topbar-spacer" />
+        <div className="tn-wallet">
           <ConnectButton />
-        </header>
-        <main className="app-content">
-          <Outlet />
-        </main>
-      </div>
+        </div>
+      </header>
+      <main className="tn-content">
+        <Outlet />
+      </main>
     </div>
   )
 }

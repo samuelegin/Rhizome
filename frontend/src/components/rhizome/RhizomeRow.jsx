@@ -17,19 +17,38 @@ export function RhizomeNodes({ have, need }) {
   )
 }
 
-function RhizomeRow({ rhizome: r }) {
-  const need = r.minimumConnections
+const plural = (n) => `${n} ${n === 1 ? 'connection' : 'connections'}`
+
+/* Large panel for "your" Rhizomes. Members invert to white. */
+export function RhizomePass({ rhizome: r }) {
   return (
-    <Link to={`/app/rhizomes/${r.address}`} className={`rz-row ${r.isMember ? 'is-member' : ''}`}>
-      <div className="rz-main">
+    <Link to={`/app/rhizomes/${r.address}`} className={`pass ${r.isMember ? 'is-member' : ''}`}>
+      <div className="pass-top">
         <h3>{r.name}</h3>
-        <p>
-          Needs {need} {need === 1 ? 'connection' : 'connections'} to anchors through {r.signalLabel || 'shared activity'}, active within the last {r.freshnessPeriodDays ?? 30} days.
-        </p>
+        <span className="pass-state">{r.isMember ? 'Member' : 'Not a member yet'}</span>
       </div>
-      <RhizomeNodes have={r.qualifyingCount} need={need} />
-      <span className={`rz-pill ${r.isMember ? 'is-member' : ''}`}>
-        {r.isMember ? 'Member' : `${r.qualifyingCount} of ${need} connected`}
+      <p className="pass-rule">
+        Connect with {plural(r.minimumConnections)} to its anchors through {r.signalLabel || 'shared activity'}, kept active within {r.freshnessPeriodDays ?? 30} days.
+      </p>
+      <div className="pass-foot">
+        <RhizomeNodes have={r.qualifyingCount} need={r.minimumConnections} />
+        <span>{r.qualifyingCount} of {r.minimumConnections} connected</span>
+      </div>
+    </Link>
+  )
+}
+
+/* Dense directory row for Explore. */
+function RhizomeRow({ rhizome: r }) {
+  return (
+    <Link to={`/app/rhizomes/${r.address}`} className={`dir-row ${r.isMember ? 'is-member' : ''}`}>
+      <span className="dir-name">{r.name}</span>
+      <span className="dir-dim">{r.signalLabel || 'Shared activity'}</span>
+      <span className="dir-dim">{plural(r.minimumConnections)} in {r.freshnessPeriodDays ?? 30} days</span>
+      <span className="dir-dim">{r.anchors?.length ?? 0}</span>
+      <span className="dir-you">
+        <RhizomeNodes have={r.qualifyingCount} need={r.minimumConnections} />
+        {r.isMember ? 'Member' : `${r.qualifyingCount} of ${r.minimumConnections}`}
       </span>
     </Link>
   )
